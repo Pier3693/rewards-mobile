@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { saveSession, type Usuario } from '@/lib/auth';
-import { LogoBadge, IconUser } from '@/components/icons';
+import Image from 'next/image';
+import { IconUser } from '@/components/icons';
 
 interface LoginData {
   token: string;
@@ -49,7 +50,13 @@ export default function LoginPage() {
       {/* Marca */}
       <div className="mb-9 text-center">
         <div className="mx-auto mb-5 w-fit">
-          <LogoBadge size={140} />
+          <Image
+            src="/logo-login.png"
+            alt="Rewards Marketing Relacional"
+            width={140}
+            height={140}
+            priority
+          />
         </div>
         <h1 className="text-[26px] font-bold tracking-tight">¡Bienvenido!</h1>
         <p className="mt-1 text-[15px] text-ink-2">
