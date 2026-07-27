@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
 import TabBar from '@/components/TabBar';
-import InstallPrompt from '@/components/InstallPrompt';
 
 export default function AppLayout({
   children,
@@ -32,7 +31,6 @@ export default function AppLayout({
     <div className="min-h-dvh pb-24">
       {children}
       <TabBar />
-      <InstallPrompt />
     </div>
   );
 }
