@@ -63,3 +63,12 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* Bottom sheet */
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-sheet-up {
+  animation: sheetUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}

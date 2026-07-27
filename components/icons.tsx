@@ -121,3 +121,67 @@ export function LogoBadge({ size = 150 }: { size?: number }) {
     </svg>
   );
 }
+
+export function IconUsers({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <path d="M16 8.2a2.6 2.6 0 1 1 0 5.2" />
+      <path d="M15 14.3c2.6.2 4.8 1.9 5 4.7" />
+    </svg>
+  );
+}
+
+export function IconVideo({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="6.5" width="13" height="11" rx="2.2" />
+      <path d="m16 10 5-2.8v9.6L16 14" />
+    </svg>
+  );
+}
+
+export function IconSearch({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m20 20-4.3-4.3" />
+    </svg>
+  );
+}
+
+export function IconCamera({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7H8l1-2h6l1 2h2.5A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5Z" />
+      <circle cx="12" cy="12.5" r="3.3" />
+    </svg>
+  );
+}
+
+export function IconX({ className = 'h-4 w-4' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <path d="m6 6 12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+export function IconMapPin({ className = 'h-4 w-4' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.3" />
+    </svg>
+  );
+}
+
+export function IconAlert({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 2 20h20L12 3Z" />
+      <path d="M12 10v4M12 17.2v.1" />
+    </svg>
+  );
+}
