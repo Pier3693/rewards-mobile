@@ -2,14 +2,13 @@
 //  Service Worker — Rewards Mobile
 //  Estrategia:
 //  - Assets estáticos (íconos, manifest): cache-first
-//  - Navegación offline: SIEMPRE HTML estático plano
-//    (sin depender de ningún JS de Next.js, que no
-//    puede hidratarse sin conexión y causa el error
-//    "Application error" del framework)
-//  - /api/: siempre red, nunca cache
+//  - Navegación (páginas): network-first con fallback
+//    a /offline si no hay conexión
+//  - Todo lo demás (API, /api/gs): siempre red, nunca
+//    cache (los datos deben ser siempre frescos)
 // ══════════════════════════════════════════════════
 
-const CACHE_VERSION = 'rewards-v2';
+const CACHE_VERSION = 'rewards-v3';
 const ASSETS_CACHE = `${CACHE_VERSION}-assets`;
 
 const ASSETS_PRECACHE = [
@@ -17,29 +16,15 @@ const ASSETS_PRECACHE = [
   '/icon-192.png',
   '/icon-512.png',
   '/logo-login.png',
+  '/offline',
 ];
-
-const OFFLINE_HTML = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sin conexión</title>
-<style>
-  body{font-family:-apple-system,sans-serif;display:flex;
-    min-height:100vh;align-items:center;justify-content:center;
-    text-align:center;padding:24px;color:#0f172a;margin:0;background:#f4f6fa}
-  button{margin-top:20px;padding:12px 24px;border:none;
-    border-radius:14px;background:#2563eb;color:#fff;
-    font-size:14px;font-weight:600}
-</style></head><body>
-<div>
-  <h1 style="font-size:18px">Sin conexión</h1>
-  <p style="color:#64748b;font-size:14px">
-    Revisa tu señal e intenta de nuevo.</p>
-  <button onclick="location.reload()">Reintentar</button>
-</div></body></html>`;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(ASSETS_CACHE).then((cache) =>
+      // Individual, no atómico: si un recurso falla, no cancela
+      // la instalación completa del Service Worker (a diferencia
+      // de cache.addAll, que es todo-o-nada).
       Promise.allSettled(
         ASSETS_PRECACHE.map((url) =>
           fetch(url)
@@ -74,15 +59,35 @@ self.addEventListener('fetch', (event) => {
   // Nunca cachear llamadas al API — siempre datos frescos
   if (url.pathname.startsWith('/api/')) return;
 
-  // Navegación de página sin red → HTML estático, sin JS,
-  // que nunca puede fallar por "chunk" faltante
+  // Navegación de página (el usuario abre/navega la app)
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(
         () =>
-          new Response(OFFLINE_HTML, {
-            headers: { 'Content-Type': 'text/html;charset=utf-8' },
-          }),
+          caches.match('/offline').then(
+            (cached) =>
+              cached ||
+              new Response(
+                `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <title>Sin conexión</title>
+                <style>
+                  body{font-family:-apple-system,sans-serif;display:flex;
+                    min-height:100vh;align-items:center;justify-content:center;
+                    text-align:center;padding:24px;color:#0f172a;margin:0}
+                  button{margin-top:20px;padding:12px 24px;border:none;
+                    border-radius:14px;background:#2563eb;color:#fff;
+                    font-size:14px;font-weight:600}
+                </style></head><body>
+                <div>
+                  <h1 style="font-size:18px">Sin conexión</h1>
+                  <p style="color:#64748b;font-size:14px">
+                    Revisa tu señal e intenta de nuevo.</p>
+                  <button onclick="location.reload()">Reintentar</button>
+                </div></body></html>`,
+                { headers: { 'Content-Type': 'text/html;charset=utf-8' } },
+              ),
+          ),
       ),
     );
     return;
