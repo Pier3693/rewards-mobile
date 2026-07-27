@@ -20,11 +20,23 @@ export default function InstallPrompt() {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
-    if (localStorage.getItem(KEY_DISMISS) === '1') return;
+    // Atajo para pruebas: ?installtest=1 ignora cualquier cierre
+    // anterior guardado en localStorage (útil para probar el banner
+    // repetidamente sin borrar datos del navegador cada vez).
+    const forzarPrueba =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('installtest') === '1';
+
+    if (forzarPrueba) {
+      localStorage.removeItem(KEY_DISMISS);
+    } else if (localStorage.getItem(KEY_DISMISS) === '1') {
+      return;
+    }
 
     const yaInstalada =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+      !forzarPrueba &&
+      (window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true);
     if (yaInstalada) return;
 
     const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
