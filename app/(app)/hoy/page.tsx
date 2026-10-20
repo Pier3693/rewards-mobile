@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getUsuario } from '@/lib/auth';
 import {
   getRutaDeHoy,
@@ -12,7 +13,6 @@ import {
   ordenarRuta,
   minutosHasta,
   textoEspera,
-  etiquetaHora,
   enlaceMeet,
   tieneMeet,
   meetEsUrgente,
@@ -28,7 +28,6 @@ import {
   fechaLarga,
   type Parada,
 } from '@/lib/ruta';
-import BottomSheet from '@/components/BottomSheet';
 import Toast from '@/components/Toast';
 import {
   FormularioVisita,
@@ -93,11 +92,11 @@ function resultadoDe(p: Parada): string {
 }
 
 export default function HoyPage() {
+  const router = useRouter();
   const user = getUsuario();
   const [data, setData] = useState<DiaData | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [detalle, setDetalle] = useState<Parada | null>(null);
   const [registrando, setRegistrando] = useState<Parada | null>(null);
   const [toast, setToast] = useState('');
   // Se refresca cada minuto para que "en 25 min" no quede congelado.
@@ -153,6 +152,16 @@ export default function HoyPage() {
       porResultado: [...porResultado.entries()],
     };
   }, [ruta]);
+
+  /**
+   * El detalle de una parada es el mismo del local, para no tener dos
+   * pantallas distintas. Sin id_local no hay a donde navegar: entonces
+   * se abre el registro, que es la unica accion util.
+   */
+  function abrirParada(p: Parada) {
+    if (p.id_local) router.push(`/local/${encodeURIComponent(p.id_local)}`);
+    else setRegistrando(p);
+  }
 
   const iniciales = (user?.nombre || 'C')
     .split(' ')
@@ -228,7 +237,7 @@ export default function HoyPage() {
                 p={p}
                 ahora={ahora}
                 ultima={i === ruta.length - 1}
-                onTap={() => setDetalle(p)}
+                onTap={() => abrirParada(p)}
               />
             ))}
           </ol>
@@ -236,14 +245,6 @@ export default function HoyPage() {
       )}
 
       <div className="h-6" />
-
-      {detalle && !registrando && (
-        <DetalleParada
-          p={detalle}
-          onClose={() => setDetalle(null)}
-          onRegistrar={() => setRegistrando(detalle)}
-        />
-      )}
 
       {registrando && (
         <FormularioVisita
@@ -262,7 +263,6 @@ export default function HoyPage() {
           onClose={() => setRegistrando(null)}
           onGuardado={() => {
             setRegistrando(null);
-            setDetalle(null);
             setToast('¡Visita registrada!');
             setTimeout(() => setToast(''), 3000);
             recargar();
@@ -580,107 +580,6 @@ function ChipMotivo({ motivo }: { motivo: string }) {
     >
       {motivo}
     </span>
-  );
-}
-
-// ══════════════════════════════════════════════════
-//  Detalle de la parada
-// ══════════════════════════════════════════════════
-function DetalleParada({
-  p,
-  onClose,
-  onRegistrar,
-}: {
-  p: Parada;
-  onClose: () => void;
-  onRegistrar: () => void;
-}) {
-  const hecha = estaCompletada(p);
-  const resultado = resultadoDe(p);
-  const meet = enlaceMeet(p);
-
-  const filas: { label: string; valor: string }[] = [
-    { label: 'Hora', valor: etiquetaHora(p) },
-    { label: 'Dirección', valor: p.direccion || '' },
-    { label: 'Centro comercial', valor: p.mall_puerta || '' },
-    { label: 'Distrito', valor: p.distrito || '' },
-    { label: 'Código', valor: p.id_local || '' },
-    { label: 'KAM', valor: p.kam || '' },
-    { label: 'PSI', valor: p.psi || '' },
-  ].filter((f) => f.valor);
-
-  return (
-    <BottomSheet titulo={p.comercio} subtitulo={ubicacionDe(p)} onClose={onClose}>
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-1.5">
-          <ChipMotivo motivo={p.motivo} />
-          {hecha && resultado && (
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${RESULTADO_CLS[resultado]}`}
-            >
-              {resultado}
-            </span>
-          )}
-        </div>
-
-        {indicacionesLimpias(p) && (
-          <div className="rounded-xl bg-gris-light px-3.5 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">
-              Indicaciones
-            </p>
-            <p className="mt-1 text-[13px] text-ink">{indicacionesLimpias(p)}</p>
-          </div>
-        )}
-
-        <div className="card divide-y divide-line border border-line !shadow-none">
-          {filas.map((f) => (
-            <div
-              key={f.label}
-              className="flex items-start justify-between gap-3 px-4 py-2.5"
-            >
-              <span className="text-[12px] text-ink-2">{f.label}</span>
-              <span className="max-w-[60%] text-right text-[13px] font-medium">
-                {f.valor}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {!esVirtual(p) && (
-          <a
-            href={enlaceMapa(p)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-primary-light text-[15px] font-semibold text-primary active:scale-[0.98]"
-          >
-            <IconNavigation className="h-[18px] w-[18px]" />
-            Cómo llegar
-          </a>
-        )}
-
-        {meet && (
-          <a
-            href={meet}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-motivo-virtual-light text-[15px] font-semibold text-motivo-virtual active:scale-[0.98]"
-          >
-            <IconVideo className="h-[18px] w-[18px]" />
-            Unirse a la reunión
-          </a>
-        )}
-
-        {!hecha && (
-          <button
-            onClick={onRegistrar}
-            className="btn-grad flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"
-          >
-            <IconPlay className="h-[18px] w-[18px]" />
-            Iniciar visita
-          </button>
-        )}
-      </div>
-    </BottomSheet>
   );
 }
 
