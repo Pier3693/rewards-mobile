@@ -10,16 +10,21 @@ import {
   type Local,
   type Motivo,
 } from '@/components/FormularioVisita';
+import { FormularioCampana } from '@/components/FormularioCampana';
 import {
-  IconBell,
   IconStore,
   IconSearch,
   IconMapPin,
+  IconMegaphone,
 } from '@/components/icons';
+
+/** Campaña no es un motivo de visita: va a otra hoja y a otro formulario. */
+const CAMPANA = 'Campaña' as const;
+type Eleccion = Motivo | typeof CAMPANA;
 
 export default function RegistrarPage() {
   const user = getUsuario();
-  const [motivo, setMotivo] = useState<Motivo | null>(null);
+  const [motivo, setMotivo] = useState<Eleccion | null>(null);
   const [query, setQuery] = useState('');
   const [resultados, setResultados] = useState<Local[]>([]);
   const [buscando, setBuscando] = useState(false);
@@ -34,7 +39,14 @@ export default function RegistrarPage() {
     .join('')
     .toUpperCase();
 
-  function seleccionarMotivo(m: Motivo) {
+  function limpiar() {
+    setLocalSel(null);
+    setMotivo(null);
+    setQuery('');
+    setResultados([]);
+  }
+
+  function seleccionarMotivo(m: Eleccion) {
     setMotivo(m);
     setQuery('');
     setResultados([]);
@@ -50,6 +62,7 @@ export default function RegistrarPage() {
     debounceRef.current = setTimeout(async () => {
       setBuscando(true);
       const tipo = MOTIVOS.find((m) => m.valor === motivo)?.tipo || 'todos';
+      // Campaña busca en todo el catálogo.
       const r = await api<Local[]>('buscarComercio', { q: q.trim(), tipo });
       setBuscando(false);
       if (r.ok && r.data) setResultados(r.data);
@@ -71,14 +84,11 @@ export default function RegistrarPage() {
             <p className="text-xs text-ink-2">Capacitador de campo</p>
           </div>
         </div>
-        <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-ink-2 shadow-sm">
-          <IconBell />
-        </span>
       </header>
 
       <h1 className="text-[22px] font-bold">Registrar visita</h1>
       <p className="mb-5 mt-0.5 text-[13px] text-ink-2">
-        {motivo ? 'Busca el comercio para continuar' : 'Selecciona el motivo de la visita'}
+        {motivo ? 'Busca el comercio para continuar' : '¿Qué vas a registrar?'}
       </p>
 
       {/* Paso 1: Motivo */}
@@ -105,6 +115,26 @@ export default function RegistrarPage() {
             </span>
           </button>
         ))}
+
+        <button
+          onClick={() => seleccionarMotivo(CAMPANA)}
+          className={`card col-span-2 flex items-center justify-center gap-2 p-3.5 !shadow-none transition ${
+            motivo === CAMPANA
+              ? 'border-2 border-primary bg-primary-light'
+              : 'border border-line'
+          }`}
+        >
+          <span className={motivo === CAMPANA ? 'text-primary' : 'text-ink-2'}>
+            <IconMegaphone />
+          </span>
+          <span
+            className={`text-[13px] font-semibold ${
+              motivo === CAMPANA ? 'text-primary' : 'text-ink'
+            }`}
+          >
+            Campaña
+          </span>
+        </button>
       </div>
 
       {/* Paso 2: Buscador (solo si ya eligió motivo) */}
@@ -160,17 +190,26 @@ export default function RegistrarPage() {
 
       <div className="h-4" />
 
-      {/* Sheet del formulario */}
-      {localSel && motivo && (
+      {/* Sheet del formulario: visita o campaña según lo elegido */}
+      {localSel && motivo === CAMPANA && (
+        <FormularioCampana
+          local={localSel}
+          onClose={() => setLocalSel(null)}
+          onGuardado={() => {
+            limpiar();
+            setToast('¡Campaña registrada!');
+            setTimeout(() => setToast(''), 3000);
+          }}
+        />
+      )}
+
+      {localSel && motivo && motivo !== CAMPANA && (
         <FormularioVisita
           local={localSel}
           motivo={motivo}
           onClose={() => setLocalSel(null)}
           onGuardado={() => {
-            setLocalSel(null);
-            setMotivo(null);
-            setQuery('');
-            setResultados([]);
+            limpiar();
             setToast('¡Visita guardada!');
             setTimeout(() => setToast(''), 3000);
           }}
