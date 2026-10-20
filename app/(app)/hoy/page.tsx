@@ -406,7 +406,7 @@ function SiguienteVisita({
         </div>
 
         {indicacionesLimpias(p) && (
-          <p className="mt-2.5 rounded-xl bg-warn-light px-3 py-2 text-[12.5px] text-warn">
+          <p className="mt-2.5 rounded-xl bg-gris-light px-3 py-2 text-[12.5px] text-ink">
             {indicacionesLimpias(p)}
           </p>
         )}
@@ -603,8 +603,8 @@ function DetalleParada({
         </div>
 
         {indicacionesLimpias(p) && (
-          <div className="rounded-xl bg-warn-light px-3.5 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-warn">
+          <div className="rounded-xl bg-gris-light px-3.5 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">
               Indicaciones
             </p>
             <p className="mt-1 text-[13px] text-ink">{indicacionesLimpias(p)}</p>
