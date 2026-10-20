@@ -511,17 +511,21 @@ function Fila({
         >
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 flex-1 truncate font-semibold">{p.comercio}</p>
-            <span
-              className={`shrink-0 text-[12px] font-semibold ${
-                estado === 'atrasada'
-                  ? 'rounded-full bg-gris-light px-2 py-0.5 text-ink'
-                  : estado === 'en-curso'
-                  ? 'rounded-full bg-primary-light px-2 py-0.5 text-primary'
-                  : 'text-ink-2'
-              }`}
-            >
-              {textoEstado(p, ahora)}
-            </span>
+            {/* Sin hora no se escribe nada: "Hora flexible" en cada fila
+                era ruido. En la tarjeta de siguiente visita si se muestra. */}
+            {estado !== 'flexible' && (
+              <span
+                className={`shrink-0 text-[12px] font-semibold ${
+                  estado === 'atrasada'
+                    ? 'rounded-full bg-gris-light px-2 py-0.5 text-ink'
+                    : estado === 'en-curso'
+                    ? 'rounded-full bg-primary-light px-2 py-0.5 text-primary'
+                    : 'text-ink-2'
+                }`}
+              >
+                {textoEstado(p, ahora)}
+              </span>
+            )}
           </div>
 
           <p className="mt-0.5 truncate text-[12.5px] text-ink-2">
