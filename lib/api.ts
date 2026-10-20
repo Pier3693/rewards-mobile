@@ -5,7 +5,7 @@
 //  - Maneja expiración de sesión (authError)
 // ══════════════════════════════════════════════════
 
-import { getToken, clearSession } from './auth';
+import { getToken, clearSession, marcarSesionExpirada } from './auth';
 
 // El cliente SIEMPRE habla con nuestro propio backend (mismo origen).
 // Es /api/gs (server-side) quien reenvía a Apps Script, evitando CORS.
@@ -31,8 +31,11 @@ export async function api<T = unknown>(
 
     const json = (await res.json()) as ApiResponse<T>;
 
-    // Sesión expirada o token inválido → limpiar y mandar al login
+    // Sesión expirada o token inválido → avisar y mandar al login.
+    // El último usuario escrito ya quedó guardado al ingresar, así que el
+    // login lo precarga y solo hay que volver a poner la contraseña.
     if (json.authError) {
+      marcarSesionExpirada();
       clearSession();
       if (typeof window !== 'undefined') window.location.href = '/login';
     }
