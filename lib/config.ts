@@ -15,4 +15,4 @@ export const ADMIN_WHATSAPP =
 
 /** Correo del admin que restablece las contraseñas. */
 export const ADMIN_EMAIL =
-  process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'gcollazos@entremarcas.com';
+  process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'gcollazos@rewardsperu.com';
