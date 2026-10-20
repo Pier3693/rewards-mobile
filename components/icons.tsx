@@ -100,28 +100,6 @@ export function IconLogout({ className = 'h-5 w-5' }: P) {
   );
 }
 
-/* Marca circular del login: texto en círculo + asterisco central */
-export function LogoBadge({ size = 150 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 150 150" className="text-primary">
-      <defs>
-        <path id="circlePath" d="M 75,75 m -55,0 a 55,55 0 1,1 110,0 a 55,55 0 1,1 -110,0" />
-      </defs>
-      <text fill="currentColor" fontSize="13.5" fontWeight="700" letterSpacing="3.5">
-        <textPath href="#circlePath">
-          REWARDS · MARKETING RELACIONAL ·
-        </textPath>
-      </text>
-      {/* Asterisco / flor central */}
-      <g stroke="currentColor" strokeWidth="7" strokeLinecap="round">
-        <path d="M75 47v56" />
-        <path d="M51 61l48 28" />
-        <path d="M99 61l-48 28" />
-      </g>
-    </svg>
-  );
-}
-
 export function IconUsers({ className = 'h-5 w-5' }: P) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

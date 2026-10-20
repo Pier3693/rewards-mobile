@@ -17,7 +17,6 @@ import {
   IconStore,
   IconRefresh,
   IconCheck,
-  IconMapPin,
   IconChevronRight,
 } from '@/components/icons';
 
