@@ -439,7 +439,7 @@ function SiguienteVisita({
                 }`}
               >
                 <IconVideo className="h-[18px] w-[18px]" />
-                Unirse
+                {urgente ? 'Unirse ahora' : 'Unirse'}
               </a>
             )
           ) : (
