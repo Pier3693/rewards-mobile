@@ -502,10 +502,12 @@ function Fila({
         {!ultima && <span className="mt-1 w-px flex-1 bg-line" />}
       </div>
 
-      <div className={`min-w-0 flex-1 ${hecha ? 'opacity-60' : ''}`}>
+      {/* La tarjeta es un div y no un button: el enlace de Meet va dentro,
+          y un <a> dentro de un <button> es HTML invalido. */}
+      <div className={`card min-w-0 flex-1 p-3.5 ${hecha ? 'opacity-60' : ''}`}>
         <button
           onClick={onTap}
-          className="card w-full p-3.5 text-left transition active:scale-[0.99]"
+          className="w-full text-left transition active:scale-[0.99]"
         >
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 flex-1 truncate font-semibold">{p.comercio}</p>
@@ -548,7 +550,7 @@ function Fila({
             href={meet}
             target="_blank"
             rel="noopener noreferrer"
-            className={`mt-1.5 flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold active:scale-[0.98] ${
+            className={`mt-2.5 flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold active:scale-[0.98] ${
               urgente
                 ? 'bg-motivo-virtual text-white'
                 : 'bg-motivo-virtual-light text-motivo-virtual'
