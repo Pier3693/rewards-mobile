@@ -77,8 +77,15 @@ const RESULTADO_PUNTO: Record<string, string> = {
   'No existe': 'bg-ink-2',
 };
 
-/** Normaliza el resultado que llega de la hoja al texto canónico. */
+/**
+ * Resultado de la visita, normalizado al texto canónico.
+ *
+ * Solo cuenta si la asignación está completada: si un admin la reabre
+ * desde el escritorio, la columna conserva el resultado anterior y la
+ * parada volvería a pintarse como hecha aunque esté pendiente.
+ */
 function resultadoDe(p: Parada): string {
+  if (!estaCompletada(p)) return '';
   const r = String(p.resultado || '').trim();
   return (
     Object.keys(RESULTADO_CLS).find(
