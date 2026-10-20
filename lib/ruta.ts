@@ -7,6 +7,8 @@
 //  Buscar (Fase 3) e Historial (Fase 6).
 // ══════════════════════════════════════════════════
 
+import { tituloBonito } from './texto.ts';
+
 export interface Parada {
   id_asignacion: string;
   comercio: string;
@@ -226,8 +228,9 @@ export function ubicacionDe(p: Parada): string {
   const partes = esCentroComercial(p)
     ? [p.mall_puerta, p.distrito]
     : [p.direccion, p.distrito];
-  const texto = partes.map((x) => String(x || '').trim()).filter(Boolean).join(' · ');
-  return texto || String(p.mall_puerta || '').trim() || 'Sin ubicación';
+  // La hoja los guarda en mayúsculas; acá solo se arregla cómo se ven.
+  const texto = partes.map(tituloBonito).filter(Boolean).join(' · ');
+  return texto || tituloBonito(p.mall_puerta) || 'Sin ubicación';
 }
 
 // ── Indicaciones ──────────────────────────────────

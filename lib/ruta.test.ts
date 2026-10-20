@@ -316,6 +316,18 @@ describe('ubicacionDe', () => {
   test('sin nada, avisa en vez de quedar vacío', () => {
     assert.equal(ubicacionDe(parada()), 'Sin ubicación');
   });
+
+  test('los nombres en mayúsculas se muestran con mayúscula inicial', () => {
+    const cc = parada({ mall_puerta: 'C.C. PLAZA SAN MIGUEL', distrito: 'SAN MIGUEL' });
+    assert.equal(ubicacionDe(cc), 'C.C. Plaza San Miguel · San Miguel');
+
+    const pc = parada({
+      mall_puerta: 'Puerta Calle',
+      direccion: 'AV. BENAVIDES 730',
+      distrito: 'MIRAFLORES',
+    });
+    assert.equal(ubicacionDe(pc), 'Av. Benavides 730 · Miraflores');
+  });
 });
 
 describe('enlaceMeet', () => {
