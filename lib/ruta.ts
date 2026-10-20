@@ -37,6 +37,9 @@ export const MINUTOS_ANTES_DESTACAR = 10;
 /** Cuánto dura una parada cuando la hoja no trae hora_fin. */
 export const MINUTOS_DURACION_POR_DEFECTO = 60;
 
+/** Margen después del fin antes de dar una parada por perdida. */
+export const MINUTOS_TOLERANCIA = 60;
+
 // ── Horas ─────────────────────────────────────────
 
 /**
@@ -209,6 +212,40 @@ export function indicacionesLimpias(p: Parada): string {
 
 export function estaCompletada(p: Parada): boolean {
   return /completad/i.test(String(p.status || ''));
+}
+
+/**
+ * Una parada ya no vale la pena: se salta al elegir "Siguiente visita".
+ *
+ * - Hora flexible: nunca vence, se puede hacer en cualquier momento.
+ * - Capacitación Virtual: vence cuando termina la reunión. Entrar a un
+ *   Meet que ya acabó no sirve de nada.
+ * - El resto: vence una hora después de su fin, que da margen para
+ *   llegar tarde pero evita proponer algo de la mañana a media tarde.
+ */
+export function estaVencida(p: Parada, ahora = new Date()): boolean {
+  const fin = finEnMinutos(p);
+  if (fin === null) return false;
+  const t = minutosDelDia(ahora);
+  return p.motivo === MOTIVO_VIRTUAL ? t > fin : t > fin + MINUTOS_TOLERANCIA;
+}
+
+/** Pendiente y con la hora ya pasada. */
+export function estaAtrasada(p: Parada, ahora = new Date()): boolean {
+  if (estaCompletada(p)) return false;
+  const min = minutosHasta(p.hora, ahora);
+  return min !== null && min < 0;
+}
+
+/**
+ * Primera parada pendiente que todavía se puede hacer. Si todas las
+ * pendientes vencieron, devuelve la primera de ellas: habiendo trabajo
+ * por hacer, la tarjeta nunca se queda vacía.
+ */
+export function siguienteParada(ruta: Parada[], ahora = new Date()): Parada | null {
+  const pendientes = ruta.filter((p) => !estaCompletada(p));
+  if (!pendientes.length) return null;
+  return pendientes.find((p) => !estaVencida(p, ahora)) || pendientes[0];
 }
 
 // ── Saludo y fecha ────────────────────────────────

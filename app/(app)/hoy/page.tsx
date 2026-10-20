@@ -15,6 +15,7 @@ import {
   ubicacionDe,
   indicacionesLimpias,
   estaCompletada,
+  siguienteParada,
   saludoPorHora,
   fechaLarga,
   type Parada,
@@ -121,10 +122,7 @@ export default function HoyPage() {
     return ordenarRuta([...data.pendientes, ...data.completadas]);
   }, [data]);
 
-  const siguiente = useMemo(
-    () => ruta.find((p) => !estaCompletada(p)) || null,
-    [ruta],
-  );
+  const siguiente = useMemo(() => siguienteParada(ruta, ahora), [ruta, ahora]);
 
   const avance = useMemo(() => {
     const total = ruta.length;
