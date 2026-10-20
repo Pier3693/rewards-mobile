@@ -12,6 +12,7 @@ import {
   tieneMeet,
   meetEsUrgente,
   enlaceMapa,
+  esVirtual,
   ubicacionDe,
   indicacionesLimpias,
   estaCompletada,
@@ -371,6 +372,7 @@ function SiguienteVisita({
   const meet = enlaceMeet(p);
   const urgente = tieneMeet(p) && meetEsUrgente(p, ahora);
   const atrasada = estaAtrasada(p, ahora);
+  const virtual = esVirtual(p);
 
   return (
     <section className="mt-5">
@@ -410,15 +412,35 @@ function SiguienteVisita({
         )}
 
         <div className="mt-3.5 flex gap-2">
-          <a
-            href={enlaceMapa(p)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary-light text-[14px] font-semibold text-primary active:scale-[0.98]"
-          >
-            <IconNavigation className="h-[18px] w-[18px]" />
-            Cómo llegar
-          </a>
+          {/* En una capacitación virtual no hay a dónde ir: su lugar lo
+              ocupa el botón de la reunión. */}
+          {virtual ? (
+            meet && (
+              <a
+                href={meet}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] ${
+                  urgente
+                    ? 'bg-motivo-virtual text-white'
+                    : 'bg-motivo-virtual-light text-motivo-virtual'
+                }`}
+              >
+                <IconVideo className="h-[18px] w-[18px]" />
+                Unirse
+              </a>
+            )
+          ) : (
+            <a
+              href={enlaceMapa(p)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary-light text-[14px] font-semibold text-primary active:scale-[0.98]"
+            >
+              <IconNavigation className="h-[18px] w-[18px]" />
+              Cómo llegar
+            </a>
+          )}
           <button
             onClick={onIniciar}
             className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary text-[14px] font-semibold text-white active:scale-[0.98]"
@@ -427,22 +449,6 @@ function SiguienteVisita({
             Iniciar visita
           </button>
         </div>
-
-        {meet && (
-          <a
-            href={meet}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`mt-2 flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] ${
-              urgente
-                ? 'bg-motivo-virtual text-white'
-                : 'bg-motivo-virtual-light text-motivo-virtual'
-            }`}
-          >
-            <IconVideo className="h-[18px] w-[18px]" />
-            Unirse a la reunión
-          </a>
-        )}
       </div>
     </section>
   );
@@ -619,15 +625,17 @@ function DetalleParada({
           ))}
         </div>
 
-        <a
-          href={enlaceMapa(p)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-primary-light text-[15px] font-semibold text-primary active:scale-[0.98]"
-        >
-          <IconNavigation className="h-[18px] w-[18px]" />
-          Cómo llegar
-        </a>
+        {!esVirtual(p) && (
+          <a
+            href={enlaceMapa(p)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-primary-light text-[15px] font-semibold text-primary active:scale-[0.98]"
+          >
+            <IconNavigation className="h-[18px] w-[18px]" />
+            Cómo llegar
+          </a>
+        )}
 
         {meet && (
           <a

@@ -145,9 +145,14 @@ export function enlaceMeet(p: Parada): string {
   return meet;
 }
 
+/** True si la parada es una capacitación virtual. */
+export function esVirtual(p: Parada): boolean {
+  return p.motivo === MOTIVO_VIRTUAL;
+}
+
 /** True si es una capacitación virtual con enlace utilizable. */
 export function tieneMeet(p: Parada): boolean {
-  return p.motivo === MOTIVO_VIRTUAL && !!enlaceMeet(p);
+  return esVirtual(p) && !!enlaceMeet(p);
 }
 
 /**
