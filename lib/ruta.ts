@@ -54,12 +54,28 @@ export const MINUTOS_MARGEN_LLEGADA = 15;
  * después de "10:00" cuando la hoja no trae el cero delante.
  */
 export function horaAMinutos(hora: string | undefined): number | null {
-  const m = String(hora || '').trim().match(/^(\d{1,2}):(\d{2})/);
+  // Sin anclar al inicio: la hoja a veces trae basura alrededor, como "15:00'".
+  const m = String(hora || '').match(/(\d{1,2}):(\d{2})/);
   if (!m) return null;
   const h = Number(m[1]);
   const min = Number(m[2]);
   if (h > 23 || min > 59) return null;
   return h * 60 + min;
+}
+
+/**
+ * La hora lista para mostrar, siempre como HH:mm.
+ *
+ * La celda puede venir con caracteres de más —un caso real fue "15:00'",
+ * que se pintaba tal cual— o sin el cero delante. Devuelve cadena vacía
+ * si no hay nada reconocible, para no mostrar basura.
+ */
+export function horaNormalizada(hora: string | undefined): string {
+  const min = horaAMinutos(hora);
+  if (min === null) return '';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 /** True si la parada no tiene hora fija. */
@@ -110,8 +126,10 @@ export function textoEspera(minutos: number | null): string {
 /** Etiqueta de hora para la lista: "09:00", "09:00 – 11:00" o "Hora flexible". */
 export function etiquetaHora(p: Parada): string {
   if (esHoraFlexible(p)) return 'Hora flexible';
-  if (p.estado === 'rango' && p.hora_fin) return `${p.hora} – ${p.hora_fin}`;
-  return p.hora;
+  const inicio = horaNormalizada(p.hora);
+  const fin = horaNormalizada(p.hora_fin);
+  if (p.estado === 'rango' && fin) return `${inicio} – ${fin}`;
+  return inicio;
 }
 
 // ── Orden de la ruta ──────────────────────────────
@@ -299,11 +317,11 @@ export function textoEstado(p: Parada, ahora = new Date()): string {
     const inicio = horaAMinutos(p.hora);
     const rango =
       fin !== null && inicio !== null && fin > inicio
-        ? `${p.hora}–${p.hora_fin}`
-        : p.hora;
+        ? `${horaNormalizada(p.hora)}–${horaNormalizada(p.hora_fin)}`
+        : horaNormalizada(p.hora);
     return `En curso · ${rango}`;
   }
-  if (estado === 'atrasada') return `Atrasada · ${p.hora}`;
+  if (estado === 'atrasada') return `Atrasada · ${horaNormalizada(p.hora)}`;
   return etiquetaHora(p);
 }
 

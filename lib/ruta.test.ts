@@ -17,6 +17,7 @@ import {
   ordenarRuta,
   horaAMinutos,
   finEnMinutos,
+  horaNormalizada,
   estadoTemporal,
   textoEstado,
   tieneVentanaReal,
@@ -265,6 +266,31 @@ describe('ordenarRuta', () => {
     assert.equal(horaAMinutos('9:00'), horaAMinutos('09:00'));
     assert.equal(horaAMinutos(''), null);
     assert.equal(horaAMinutos('99:99'), null);
+  });
+});
+
+describe('horaNormalizada', () => {
+  // Caso real: una celda traia "15:00'" y se pintaba con el apostrofo.
+  test('limpia los caracteres de mas de la celda', () => {
+    assert.equal(horaNormalizada("15:00'"), '15:00');
+    assert.equal(horaNormalizada(" '15:00 "), '15:00');
+  });
+
+  test('pone el cero delante', () => {
+    assert.equal(horaNormalizada('9:05'), '09:05');
+  });
+
+  test('devuelve vacio si no hay hora reconocible', () => {
+    assert.equal(horaNormalizada(''), '');
+    assert.equal(horaNormalizada('por confirmar'), '');
+    assert.equal(horaNormalizada('99:99'), '');
+  });
+
+  test('el apostrofo tampoco se cuela en las etiquetas', () => {
+    const p = parada({ motivo: VIRTUAL, hora: "15:00'" });
+    assert.equal(textoEstado(p, alas(15, 30)), 'En curso · 15:00');
+    assert.equal(textoEstado(p, alas(18, 0)), 'Atrasada · 15:00');
+    assert.equal(etiquetaHora(parada({ hora: "9:00'" })), '09:00');
   });
 });
 
