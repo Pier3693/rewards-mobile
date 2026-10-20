@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { IconHome, IconPlus, IconUser } from '@/components/icons';
+import { IconHome, IconSearch, IconPlus, IconUser } from '@/components/icons';
 
 export default function TabBar() {
   const pathname = usePathname();
@@ -19,6 +19,11 @@ export default function TabBar() {
         <Link href="/hoy" className={item(is('/hoy'))}>
           <IconHome className="h-[22px] w-[22px]" />
           Hoy
+        </Link>
+
+        <Link href="/buscar" className={item(is('/buscar'))}>
+          <IconSearch className="h-[22px] w-[22px]" />
+          Buscar
         </Link>
 
         {/* Botón central elevado (mockup 3) */}
