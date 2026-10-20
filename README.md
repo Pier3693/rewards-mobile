@@ -21,7 +21,7 @@ de la hoja `usuarios`.
 1. Sube este repo a GitHub
 2. En vercel.com → Add New Project → importa el repo
 3. En Environment Variables agrega:
-   `NEXT_PUBLIC_API_URL` = tu URL /exec
+   `APPS_SCRIPT_URL` = tu URL /exec
 4. Deploy
 
 ## Estructura
