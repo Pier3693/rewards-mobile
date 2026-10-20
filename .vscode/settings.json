@@ -1,0 +1,6 @@
+{
+  // Tailwind v4 usa at-rules propias (@theme, @import 'tailwindcss') que el
+  // validador CSS de VS Code no conoce y marca como "Unknown at rule".
+  // Es un falso positivo: PostCSS las procesa y el build pasa sin errores.
+  "css.lint.unknownAtRules": "ignore"
+}
