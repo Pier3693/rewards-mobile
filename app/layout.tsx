@@ -16,6 +16,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Sin viewport-fit=cover, env(safe-area-inset-*) vale 0 y las clases
+  // .safe-t / .safe-b no hacen nada: el contenido queda bajo el notch
+  // y bajo la rayita del iPhone.
+  viewportFit: 'cover',
   themeColor: '#3d35c8',
 };
 
