@@ -3,9 +3,8 @@
 /* ══ Tokens de marca — según mockup mobile ══ */
 @theme {
   --color-primary: #3d35c8;
-  --color-primary-deep: #2e27a0;
   --color-primary-light: #eeedfe;
-  --color-teal: #6c63e8;
+  --color-primary-mid: #6c63e8;
   --color-ok: #16a34a;
   --color-ok-light: #dcfce7;
   --color-warn: #d97706;
@@ -40,7 +39,7 @@ body {
 
 /* Botón principal con gradiente del mockup */
 .btn-grad {
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-teal) 100%);
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-mid) 100%);
 }
 
 /* Tarjeta base */

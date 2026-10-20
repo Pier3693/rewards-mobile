@@ -41,7 +41,7 @@ interface DiaData {
 
 const MOTIVO_COLOR: Record<string, string> = {
   Branding: 'bg-primary-light text-primary',
-  Visita: 'bg-teal/10 text-teal',
+  Visita: 'bg-primary-mid/10 text-primary-mid',
   'Capacitación Presencial': 'bg-warn-light text-warn',
   'Capacitación Virtual': 'bg-err-light text-err',
 };
