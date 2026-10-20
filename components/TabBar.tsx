@@ -2,12 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  IconCalendar,
-  IconPlus,
-  IconMegaphone,
-  IconUser,
-} from '@/components/icons';
+import { IconHome, IconPlus, IconUser } from '@/components/icons';
 
 export default function TabBar() {
   const pathname = usePathname();
@@ -19,11 +14,11 @@ export default function TabBar() {
     }`;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 backdrop-blur safe-b">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-1 backdrop-blur safe-b">
       <div className="mx-auto flex max-w-md items-end px-2">
         <Link href="/hoy" className={item(is('/hoy'))}>
-          <IconCalendar className="h-[22px] w-[22px]" />
-          Mis visitas
+          <IconHome className="h-[22px] w-[22px]" />
+          Hoy
         </Link>
 
         {/* Botón central elevado (mockup 3) */}
@@ -45,11 +40,6 @@ export default function TabBar() {
           >
             Registrar
           </span>
-        </Link>
-
-        <Link href="/campana" className={item(is('/campana'))}>
-          <IconMegaphone className="h-[22px] w-[22px]" />
-          Campaña
         </Link>
 
         <Link href="/perfil" className={item(is('/perfil'))}>
