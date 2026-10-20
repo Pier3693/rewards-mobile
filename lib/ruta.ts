@@ -31,6 +31,9 @@ export interface Parada {
 
 export const MOTIVO_VIRTUAL = 'Capacitación Virtual';
 
+/** Momento en que está una parada. Los cuatro valores son excluyentes. */
+export type EstadoTemporal = 'flexible' | 'programada' | 'en-curso' | 'atrasada';
+
 /** Minutos antes de la hora a partir de los cuales se destaca "Unirse". */
 export const MINUTOS_ANTES_DESTACAR = 10;
 
@@ -39,6 +42,9 @@ export const MINUTOS_DURACION_POR_DEFECTO = 60;
 
 /** Margen después del fin antes de dar una parada por perdida. */
 export const MINUTOS_TOLERANCIA = 60;
+
+/** Margen para llegar a una parada sin hora de fin antes de marcarla atrasada. */
+export const MINUTOS_MARGEN_LLEGADA = 15;
 
 // ── Horas ─────────────────────────────────────────
 
@@ -235,11 +241,70 @@ export function estaVencida(p: Parada, ahora = new Date()): boolean {
   return p.motivo === MOTIVO_VIRTUAL ? t > fin : t > fin + MINUTOS_TOLERANCIA;
 }
 
-/** Pendiente y con la hora ya pasada. */
-export function estaAtrasada(p: Parada, ahora = new Date()): boolean {
-  if (estaCompletada(p)) return false;
-  const min = minutosHasta(p.hora, ahora);
-  return min !== null && min < 0;
+/**
+ * Una parada tiene ventana real cuando se sabe hasta cuándo dura: las
+ * capacitaciones virtuales (la reunión ocupa un rato) y cualquiera que
+ * traiga un hora_fin posterior al inicio.
+ */
+export function tieneVentanaReal(p: Parada): boolean {
+  const inicio = horaAMinutos(p.hora);
+  if (inicio === null) return false;
+  const fin = horaAMinutos(p.hora_fin);
+  return esVirtual(p) || (fin !== null && fin > inicio);
+}
+
+/**
+ * En qué momento de su vida está una parada. Un único valor en vez de
+ * varios booleanos sueltos: así es imposible que diga "en curso" y
+ * "atrasada" a la vez, que era justo el error.
+ *
+ *   CON ventana real          hora            fin
+ *                              │               │
+ *      ────── programada ──────┼── en-curso ───┼── atrasada ──►
+ *
+ *   SIN ventana real          hora       hora + 15 min
+ *                              │              │
+ *      ────── programada ──────┴──────────────┼── atrasada ──►
+ *                                      margen para llegar
+ */
+export function estadoTemporal(p: Parada, ahora = new Date()): EstadoTemporal {
+  if (esHoraFlexible(p)) return 'flexible';
+
+  const inicio = horaAMinutos(p.hora);
+  if (inicio === null) return 'flexible';
+
+  // Lo ya hecho no se atrasa ni sigue en curso: muestra su hora y punto.
+  if (estaCompletada(p)) return 'programada';
+
+  const t = minutosDelDia(ahora);
+  if (t < inicio) return 'programada';
+
+  if (tieneVentanaReal(p)) {
+    return t <= (finEnMinutos(p) as number) ? 'en-curso' : 'atrasada';
+  }
+  return t <= inicio + MINUTOS_MARGEN_LLEGADA ? 'programada' : 'atrasada';
+}
+
+/**
+ * Texto de la hora según el estado.
+ *
+ * El rango solo se muestra cuando hora_fin es un dato real de la hoja.
+ * En una virtual sin hora_fin el final lo calcula el código, y enseñarlo
+ * sería presentar una suposición nuestra como si fuera un dato.
+ */
+export function textoEstado(p: Parada, ahora = new Date()): string {
+  const estado = estadoTemporal(p, ahora);
+  if (estado === 'en-curso') {
+    const fin = horaAMinutos(p.hora_fin);
+    const inicio = horaAMinutos(p.hora);
+    const rango =
+      fin !== null && inicio !== null && fin > inicio
+        ? `${p.hora}–${p.hora_fin}`
+        : p.hora;
+    return `En curso · ${rango}`;
+  }
+  if (estado === 'atrasada') return `Atrasada · ${p.hora}`;
+  return etiquetaHora(p);
 }
 
 /**

@@ -16,7 +16,8 @@ import {
   ubicacionDe,
   indicacionesLimpias,
   estaCompletada,
-  estaAtrasada,
+  estadoTemporal,
+  textoEstado,
   siguienteParada,
   saludoPorHora,
   fechaLarga,
@@ -371,7 +372,7 @@ function SiguienteVisita({
   const espera = textoEspera(min);
   const meet = enlaceMeet(p);
   const urgente = tieneMeet(p) && meetEsUrgente(p, ahora);
-  const atrasada = estaAtrasada(p, ahora);
+  const estado = estadoTemporal(p, ahora);
   const virtual = esVirtual(p);
 
   return (
@@ -384,12 +385,16 @@ function SiguienteVisita({
         <div className="mb-2.5 flex items-center gap-2">
           <span
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${
-              atrasada ? 'bg-gris-light text-ink' : 'bg-primary-light text-primary'
+              estado === 'atrasada'
+                ? 'bg-gris-light text-ink'
+                : 'bg-primary-light text-primary'
             }`}
           >
             <IconClock className="h-3.5 w-3.5" />
-            {atrasada ? `Atrasada · ${etiquetaHora(p)}` : etiquetaHora(p)}
-            {espera && <span className="font-medium">· {espera}</span>}
+            {textoEstado(p, ahora)}
+            {estado === 'programada' && espera && (
+              <span className="font-medium">· {espera}</span>
+            )}
           </span>
         </div>
 
@@ -472,7 +477,7 @@ function Fila({
   const resultado = resultadoDe(p);
   const meet = enlaceMeet(p);
   const urgente = !hecha && tieneMeet(p) && meetEsUrgente(p, ahora);
-  const atrasada = estaAtrasada(p, ahora);
+  const estado = estadoTemporal(p, ahora);
 
   const punto = hecha
     ? RESULTADO_PUNTO[resultado] || 'bg-ink-2'
@@ -499,12 +504,14 @@ function Fila({
             <p className="min-w-0 flex-1 truncate font-semibold">{p.comercio}</p>
             <span
               className={`shrink-0 text-[12px] font-semibold ${
-                atrasada
+                estado === 'atrasada'
                   ? 'rounded-full bg-gris-light px-2 py-0.5 text-ink'
+                  : estado === 'en-curso'
+                  ? 'rounded-full bg-primary-light px-2 py-0.5 text-primary'
                   : 'text-ink-2'
               }`}
             >
-              {atrasada ? `Atrasada · ${etiquetaHora(p)}` : etiquetaHora(p)}
+              {textoEstado(p, ahora)}
             </span>
           </div>
 
