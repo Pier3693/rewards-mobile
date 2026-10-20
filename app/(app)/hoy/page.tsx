@@ -15,6 +15,7 @@ import {
   ubicacionDe,
   indicacionesLimpias,
   estaCompletada,
+  estaAtrasada,
   siguienteParada,
   saludoPorHora,
   fechaLarga,
@@ -369,6 +370,7 @@ function SiguienteVisita({
   const espera = textoEspera(min);
   const meet = enlaceMeet(p);
   const urgente = tieneMeet(p) && meetEsUrgente(p, ahora);
+  const atrasada = estaAtrasada(p, ahora);
 
   return (
     <section className="mt-5">
@@ -378,9 +380,13 @@ function SiguienteVisita({
 
       <div className="card border border-primary/25 p-4">
         <div className="mb-2.5 flex items-center gap-2">
-          <span className="flex items-center gap-1.5 rounded-full bg-primary-light px-2.5 py-1 text-[12px] font-semibold text-primary">
+          <span
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+              atrasada ? 'bg-gris-light text-ink' : 'bg-primary-light text-primary'
+            }`}
+          >
             <IconClock className="h-3.5 w-3.5" />
-            {etiquetaHora(p)}
+            {atrasada ? `Atrasada · ${etiquetaHora(p)}` : etiquetaHora(p)}
             {espera && <span className="font-medium">· {espera}</span>}
           </span>
         </div>
@@ -460,6 +466,7 @@ function Fila({
   const resultado = resultadoDe(p);
   const meet = enlaceMeet(p);
   const urgente = !hecha && tieneMeet(p) && meetEsUrgente(p, ahora);
+  const atrasada = estaAtrasada(p, ahora);
 
   const punto = hecha
     ? RESULTADO_PUNTO[resultado] || 'bg-ink-2'
@@ -484,8 +491,14 @@ function Fila({
         >
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 flex-1 truncate font-semibold">{p.comercio}</p>
-            <span className="shrink-0 text-[12px] font-semibold text-ink-2">
-              {etiquetaHora(p)}
+            <span
+              className={`shrink-0 text-[12px] font-semibold ${
+                atrasada
+                  ? 'rounded-full bg-gris-light px-2 py-0.5 text-ink'
+                  : 'text-ink-2'
+              }`}
+            >
+              {atrasada ? `Atrasada · ${etiquetaHora(p)}` : etiquetaHora(p)}
             </span>
           </div>
 
