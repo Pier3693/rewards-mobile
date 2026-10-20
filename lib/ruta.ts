@@ -31,8 +31,11 @@ export interface Parada {
 
 export const MOTIVO_VIRTUAL = 'Capacitación Virtual';
 
-/** Minutos antes de la reunión a partir de los cuales se destaca "Unirse". */
-export const MINUTOS_MEET_URGENTE = 10;
+/** Minutos antes de la hora a partir de los cuales se destaca "Unirse". */
+export const MINUTOS_ANTES_DESTACAR = 10;
+
+/** Cuánto dura una parada cuando la hoja no trae hora_fin. */
+export const MINUTOS_DURACION_POR_DEFECTO = 60;
 
 // ── Horas ─────────────────────────────────────────
 
@@ -55,11 +58,28 @@ export function esHoraFlexible(p: Parada): boolean {
   return p.estado === 'flexible' || horaAMinutos(p.hora) === null;
 }
 
+/** Minutos transcurridos desde medianoche. */
+export function minutosDelDia(ahora = new Date()): number {
+  return ahora.getHours() * 60 + ahora.getMinutes();
+}
+
 /** Minutos que faltan para la hora de la parada. Negativo si ya pasó. */
 export function minutosHasta(hora: string | undefined, ahora = new Date()): number | null {
   const destino = horaAMinutos(hora);
   if (destino === null) return null;
-  return destino - (ahora.getHours() * 60 + ahora.getMinutes());
+  return destino - minutosDelDia(ahora);
+}
+
+/**
+ * Minuto del día en que termina la parada: hora_fin si viene, y si no
+ * una hora después del inicio. Un hora_fin anterior o igual al inicio es
+ * un dato malo de la hoja y se ignora.
+ */
+export function finEnMinutos(p: Parada): number | null {
+  const inicio = horaAMinutos(p.hora);
+  if (inicio === null) return null;
+  const fin = horaAMinutos(p.hora_fin);
+  return fin !== null && fin > inicio ? fin : inicio + MINUTOS_DURACION_POR_DEFECTO;
 }
 
 /** "en 25 min" · "en 1 h 20 min" · "ahora" · "hace 15 min" */
@@ -127,10 +147,19 @@ export function tieneMeet(p: Parada): boolean {
   return p.motivo === MOTIVO_VIRTUAL && !!enlaceMeet(p);
 }
 
-/** True si la reunión ya empezó o empieza en menos de 10 minutos. */
+/**
+ * True solo DENTRO de la ventana de la reunión: desde 10 minutos antes
+ * de la hora hasta que termina.
+ *
+ * Antes solo se miraba "faltan 10 minutos o menos", sin límite inferior,
+ * así que una reunión de las 09:00 seguía destacada a las 11:25.
+ */
 export function meetEsUrgente(p: Parada, ahora = new Date()): boolean {
-  const min = minutosHasta(p.hora, ahora);
-  return min !== null && min <= MINUTOS_MEET_URGENTE;
+  const inicio = horaAMinutos(p.hora);
+  const fin = finEnMinutos(p);
+  if (inicio === null || fin === null) return false;
+  const t = minutosDelDia(ahora);
+  return t >= inicio - MINUTOS_ANTES_DESTACAR && t <= fin;
 }
 
 /**
