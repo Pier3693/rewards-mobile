@@ -1,8 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '@/lib/api';
 import { getUsuario } from '@/lib/auth';
+import {
+  getRutaDeHoy,
+  invalidarRutaDeHoy,
+  paradasDelDia,
+  type DiaData,
+} from '@/lib/cacheDia';
 import {
   ordenarRuta,
   minutosHasta,
@@ -39,13 +44,6 @@ import {
   IconNavigation,
   IconClock,
 } from '@/components/icons';
-
-interface DiaData {
-  fecha: string;
-  pendientes: Parada[];
-  completadas: Parada[];
-  total: number;
-}
 
 // ── Paleta de motivos ─────────────────────────────
 // Nunca comparte color con un resultado: verde, rojo, ámbar y gris
@@ -105,10 +103,10 @@ export default function HoyPage() {
   // Se refresca cada minuto para que "en 25 min" no quede congelado.
   const [ahora, setAhora] = useState(() => new Date());
 
-  const cargar = useCallback(async () => {
+  const cargar = useCallback(async (forzar = false) => {
     setCargando(true);
     setError('');
-    const r = await api<DiaData>('getAsignacionesDia');
+    const r = await getRutaDeHoy(forzar);
     setCargando(false);
     if (!r.ok || !r.data) {
       setError(r.error || 'No se pudieron cargar tus visitas');
@@ -116,6 +114,12 @@ export default function HoyPage() {
     }
     setData(r.data);
   }, []);
+
+  /** Vuelve a preguntarle al backend, ignorando la caché. */
+  const recargar = useCallback(() => {
+    invalidarRutaDeHoy();
+    cargar(true);
+  }, [cargar]);
 
   useEffect(() => {
     cargar();
@@ -127,10 +131,7 @@ export default function HoyPage() {
   }, []);
 
   // Toda la ruta en un solo hilo, ordenada por hora.
-  const ruta = useMemo(() => {
-    if (!data) return [];
-    return ordenarRuta([...data.pendientes, ...data.completadas]);
-  }, [data]);
+  const ruta = useMemo(() => ordenarRuta(paradasDelDia(data)), [data]);
 
   const siguiente = useMemo(() => siguienteParada(ruta, ahora), [ruta, ahora]);
 
@@ -181,7 +182,7 @@ export default function HoyPage() {
         <div className="card p-6 text-center">
           <p className="text-sm font-medium text-err">{error}</p>
           <button
-            onClick={cargar}
+            onClick={recargar}
             className="mx-auto mt-4 flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white"
           >
             <IconRefresh className="h-4 w-4" /> Reintentar
@@ -199,7 +200,7 @@ export default function HoyPage() {
             para este día
           </p>
           <button
-            onClick={cargar}
+            onClick={recargar}
             className="mx-auto mt-5 flex min-h-11 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-white active:scale-[0.98]"
           >
             <IconRefresh className="h-4 w-4" /> Actualizar
@@ -264,7 +265,7 @@ export default function HoyPage() {
             setDetalle(null);
             setToast('¡Visita registrada!');
             setTimeout(() => setToast(''), 3000);
-            cargar();
+            recargar();
           }}
         />
       )}
