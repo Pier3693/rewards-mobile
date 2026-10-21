@@ -3,18 +3,36 @@ import assert from 'node:assert/strict';
 
 import {
   pesoDeDataUrl,
+  pesoEnEnvio,
   pesoTotal,
+  pesoPeticion,
+  peticionCabe,
   pesoLegible,
   cabeOtraFoto,
+  comprimirParaQueQuepa,
+  COMPRESION_NORMAL,
+  COMPRESION_FUERTE,
   TOPE_FOTOS,
+  LIMITE_PETICION,
   FotoNoProcesable,
+  type AjustesCompresion,
 } from './img.ts';
 
-/** Un data URL con el peso aproximado que se pida. */
+const CABECERA = 'data:image/jpeg;base64,';
+
+/** Un data URL cuya IMAGEN pesa aproximadamente lo que se pida. */
 function fotoDe(bytes: number): string {
   const caracteres = Math.ceil((bytes * 4) / 3);
-  return 'data:image/jpeg;base64,' + 'A'.repeat(caracteres);
+  return CABECERA + 'A'.repeat(caracteres);
 }
+
+/** Un data URL que ocupa EN EL ENVÍO exactamente lo que se pida. */
+function fotoQueOcupa(bytes: number): string {
+  return CABECERA + 'A'.repeat(Math.max(0, bytes - CABECERA.length));
+}
+
+/** El límite de Vercel. */
+const LIMITE_VERCEL = 4.5 * 1024 * 1024;
 
 describe('pesoDeDataUrl', () => {
   test('cuenta los bytes reales, no la longitud del texto', () => {
@@ -42,10 +60,25 @@ describe('pesoDeDataUrl', () => {
   });
 });
 
+describe('peso en el envío', () => {
+  // El fallo que corrige esto: medir la imagen y no el base64 dejaba
+  // pasar 3.5 MB de fotos que en la petición eran casi 4.7 MB.
+  test('el base64 pesa 4/3 de la imagen', () => {
+    const foto = fotoDe(300_000);
+    const proporcion = pesoEnEnvio(foto) / pesoDeDataUrl(foto);
+    assert.ok(Math.abs(proporcion - 4 / 3) < 0.01, `proporción ${proporcion}`);
+  });
+
+  test('aguanta entradas vacías', () => {
+    assert.equal(pesoEnEnvio(undefined), 0);
+    assert.equal(pesoEnEnvio(''), 0);
+  });
+});
+
 describe('pesoTotal', () => {
-  test('suma las fotos', () => {
-    const total = pesoTotal([fotoDe(100_000), fotoDe(150_000)]);
-    assert.ok(Math.abs(total - 250_000) < 10);
+  test('suma lo que ocupan en el envío', () => {
+    const total = pesoTotal([fotoQueOcupa(100_000), fotoQueOcupa(150_000)]);
+    assert.equal(total, 250_000);
   });
 
   test('sin fotos pesa cero', () => {
@@ -58,6 +91,12 @@ describe('cabeOtraFoto', () => {
   test('el tope deja margen bajo el límite de 4.5 MB', () => {
     assert.ok(TOPE_FOTOS < 4.5 * 1024 * 1024);
     assert.ok(TOPE_FOTOS >= 3 * 1024 * 1024, 'pero sin quedarse corto');
+  });
+
+  test('fotos hasta el tope + el formulario no pasan del límite de Vercel', () => {
+    const fotos = [1, 2, 3, 4].map(() => fotoQueOcupa(TOPE_FOTOS / 4));
+    const peticion = { action: 'registrarVisita', observacion: 'x'.repeat(2000), fotosBase64: fotos };
+    assert.ok(pesoPeticion(peticion) < LIMITE_VERCEL);
   });
 
   test('cuatro fotos normales caben de sobra', () => {
@@ -77,9 +116,9 @@ describe('cabeOtraFoto', () => {
   });
 
   test('corta justo cuando se pasaría del tope', () => {
-    const casi = fotoDe(TOPE_FOTOS - 1000);
-    assert.equal(cabeOtraFoto([casi], fotoDe(500)), true);
-    assert.equal(cabeOtraFoto([casi], fotoDe(5000)), false);
+    const casi = fotoQueOcupa(TOPE_FOTOS - 1000);
+    assert.equal(cabeOtraFoto([casi], fotoQueOcupa(1000)), true);
+    assert.equal(cabeOtraFoto([casi], fotoQueOcupa(1001)), false);
   });
 });
 
@@ -102,5 +141,86 @@ describe('FotoNoProcesable', () => {
   test('se puede distinguir de un error cualquiera', () => {
     assert.ok(new FotoNoProcesable() instanceof Error);
     assert.equal(new Error('otro') instanceof FotoNoProcesable, false);
+  });
+});
+
+describe('pesoPeticion', () => {
+  test('mide el JSON tal como sale', () => {
+    assert.equal(pesoPeticion({ a: 'b' }), '{"a":"b"}'.length);
+  });
+
+  // Los acentos ocupan dos bytes en UTF-8: contar caracteres se quedaría corto.
+  test('cuenta los acentos como lo que pesan', () => {
+    assert.equal(pesoPeticion('ñ'), 4); // comillas + 2 bytes
+  });
+
+  test('el límite deja margen bajo los 4.5 MB de Vercel', () => {
+    assert.ok(LIMITE_PETICION < LIMITE_VERCEL);
+  });
+
+  test('una petición normal cabe y una gigante no', () => {
+    const normal = { status: 'Todo Ok', fotosBase64: [fotoQueOcupa(400_000)] };
+    const gigante = { status: 'Todo Ok', fotosBase64: [fotoQueOcupa(LIMITE_PETICION)] };
+    assert.equal(peticionCabe(normal), true);
+    assert.equal(peticionCabe(gigante), false);
+  });
+});
+
+describe('comprimirParaQueQuepa', () => {
+  /** Compresor de mentira que devuelve el tamaño pedido para cada ajuste. */
+  function compresor(tamanos: Map<AjustesCompresion, number>) {
+    const usados: AjustesCompresion[] = [];
+    const comprimir = async (a: AjustesCompresion) => {
+      usados.push(a);
+      return fotoQueOcupa(tamanos.get(a) ?? 0);
+    };
+    return { comprimir, usados };
+  }
+
+  test('si cabe con la normal, no comprime dos veces', async () => {
+    const { comprimir, usados } = compresor(
+      new Map([[COMPRESION_NORMAL, 300_000]]),
+    );
+    const foto = await comprimirParaQueQuepa([], comprimir);
+    assert.ok(foto);
+    assert.deepEqual(usados, [COMPRESION_NORMAL]);
+  });
+
+  test('si no cabe, prueba con la fuerte antes de rechazarla', async () => {
+    const llenas = [fotoQueOcupa(TOPE_FOTOS - 200_000)];
+    const { comprimir, usados } = compresor(
+      new Map([
+        [COMPRESION_NORMAL, 300_000],
+        [COMPRESION_FUERTE, 150_000],
+      ]),
+    );
+    const foto = await comprimirParaQueQuepa(llenas, comprimir);
+    assert.equal(pesoEnEnvio(foto!), 150_000);
+    assert.deepEqual(usados, [COMPRESION_NORMAL, COMPRESION_FUERTE]);
+  });
+
+  test('si ni con la fuerte cabe, devuelve null', async () => {
+    const llenas = [fotoQueOcupa(TOPE_FOTOS - 50_000)];
+    const { comprimir } = compresor(
+      new Map([
+        [COMPRESION_NORMAL, 300_000],
+        [COMPRESION_FUERTE, 150_000],
+      ]),
+    );
+    assert.equal(await comprimirParaQueQuepa(llenas, comprimir), null);
+  });
+
+  test('una foto que no se puede leer sigue avisando', async () => {
+    await assert.rejects(
+      comprimirParaQueQuepa([], async () => {
+        throw new FotoNoProcesable();
+      }),
+      FotoNoProcesable,
+    );
+  });
+
+  test('la fuerte comprime de verdad más que la normal', () => {
+    assert.ok(COMPRESION_FUERTE.lado < COMPRESION_NORMAL.lado);
+    assert.ok(COMPRESION_FUERTE.calidad < COMPRESION_NORMAL.calidad);
   });
 });

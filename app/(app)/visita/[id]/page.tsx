@@ -5,7 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api, MS_LIMITE_CARGA, MS_LIMITE_GUARDADO } from '@/lib/api';
 import {
   comprimirImagen,
-  cabeOtraFoto,
+  comprimirParaQueQuepa,
+  peticionCabe,
+  pesoPeticion,
+  LIMITE_PETICION,
   pesoTotal,
   pesoLegible,
   TOPE_FOTOS,
@@ -301,16 +304,20 @@ export default function VisitaPage() {
     let noCaben = 0;
 
     for (const f of Array.from(files).slice(0, espacio)) {
-      let comprimida: string;
+      let comprimida: string | null;
       try {
-        comprimida = await comprimirImagen(f);
+        // Si no cabe con la compresión normal, se intenta una más fuerte
+        // antes de rechazarla.
+        comprimida = await comprimirParaQueQuepa(aceptadas, (ajustes) =>
+          comprimirImagen(f, ajustes),
+        );
       } catch {
         // Avisamos ahora, al elegirla, no al guardar con el formulario
         // ya lleno. Antes se enviaba el original sin comprimir.
         noProcesables++;
         continue;
       }
-      if (!cabeOtraFoto(aceptadas, comprimida)) {
+      if (!comprimida) {
         noCaben++;
         continue;
       }
@@ -418,7 +425,7 @@ export default function VisitaPage() {
     setError('');
     setPuedeReintentar(false);
 
-    const r = await api('registrarVisita', {
+    const peticion = {
       id_local: local.id_local,
       comercio: local.comercio,
       mall_puerta: local.mall_puerta,
@@ -438,7 +445,22 @@ export default function VisitaPage() {
       fotosBase64: fotos,
       id_asignacion: idAsignacion,
       id_visita: idVisita,
-    }, { msLimite: MS_LIMITE_GUARDADO, redirigirSiVence: false });
+    };
+
+    // Las fotos ya se controlan al elegirlas, así que esto no debería
+    // saltar nunca. Si salta, no se envía: Vercel la cortaría con un 413.
+    if (!peticionCabe(peticion)) {
+      setGuardando(false);
+      setError(
+        `La visita pesa ${pesoLegible(pesoPeticion(peticion))} y el máximo es ${pesoLegible(LIMITE_PETICION)}. Quita una foto e intenta de nuevo.`,
+      );
+      return;
+    }
+
+    const r = await api('registrarVisita', peticion, {
+      msLimite: MS_LIMITE_GUARDADO,
+      redirigirSiVence: false,
+    });
 
     // `repetida` es un éxito: el backend reconoció el id porque un envío
     // anterior sí llegó, aunque el CAP no viera la confirmación.
