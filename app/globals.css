@@ -49,6 +49,14 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
+/* Como .safe-b, pero con un suelo. Estas clases van fuera de capa, así
+   que SUSTITUYEN al padding de Tailwind en vez de sumarse: sin ese
+   max(), donde el navegador no informa safe-area el relleno queda en 0
+   y el botón se pega al borde. */
+.safe-b-min {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 /* Hueco para la barra de acción fija de las pantallas secundarias:
    el botón y su relleno, más el margen inferior del iPhone. */
 .pb-barra {

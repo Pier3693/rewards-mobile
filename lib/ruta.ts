@@ -33,6 +33,20 @@ export interface Parada {
 
 export const MOTIVO_VIRTUAL = 'Capacitación Virtual';
 
+/**
+ * Lo mínimo para saber dónde está un local y cómo escribirlo.
+ *
+ * Lo cumplen `Parada`, `Autocompletado` y `LocalCompleto`, así que las
+ * tres pantallas —Hoy, Buscar y el registro— usan las mismas funciones
+ * sin castings.
+ */
+export interface Ubicable {
+  comercio?: string;
+  mall_puerta?: string;
+  direccion?: string;
+  distrito?: string;
+}
+
 /** Momento en que está una parada. Los cuatro valores son excluyentes. */
 export type EstadoTemporal = 'flexible' | 'programada' | 'en-curso' | 'atrasada';
 
@@ -201,7 +215,7 @@ export function meetEsUrgente(p: Parada, ahora = new Date()): boolean {
  * busca por mall + marca (centros comerciales) o por dirección + distrito
  * (puerta calle). Por eso tampoco se muestra distancia en km.
  */
-export function enlaceMapa(p: Parada): string {
+export function enlaceMapa(p: Ubicable): string {
   const partes = esCentroComercial(p)
     ? [p.mall_puerta, p.comercio, p.distrito]
     : [p.direccion, p.distrito, 'Lima'];
@@ -215,7 +229,7 @@ export function enlaceMapa(p: Parada): string {
  * El catálogo fija mall_puerta = "Puerta Calle" para los locales PC, así
  * que ese literal no identifica nada: hay que mirar la dirección.
  */
-export function esCentroComercial(p: Parada): boolean {
+export function esCentroComercial(p: Ubicable): boolean {
   const mall = String(p.mall_puerta || '').trim();
   return !!mall && !/^puerta\s*calle$/i.test(mall);
 }
@@ -224,7 +238,7 @@ export function esCentroComercial(p: Parada): boolean {
  * Línea de ubicación que distingue de verdad una parada de otra:
  * "Jockey Plaza · Surco" o "Av. Benavides 730 · Miraflores".
  */
-export function ubicacionDe(p: Parada): string {
+export function ubicacionDe(p: Ubicable): string {
   const partes = esCentroComercial(p)
     ? [p.mall_puerta, p.distrito]
     : [p.direccion, p.distrito];

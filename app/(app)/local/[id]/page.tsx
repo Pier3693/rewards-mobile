@@ -12,7 +12,6 @@ import {
 import {
   avisoUltimaVisita,
   diasDesde,
-  esLocalCC,
   textoAntiguedad,
   textoParaCopiar,
   type LocalCompleto,
@@ -27,6 +26,7 @@ import {
   tieneMeet,
   meetEsUrgente,
   enlaceMapa,
+  ubicacionDe,
   indicacionesLimpias,
   type Parada,
 } from '@/lib/ruta';
@@ -153,13 +153,7 @@ export default function LocalPage() {
     );
   }
 
-  const esCC = esLocalCC(local);
-  const ubicacion = [
-    tituloBonito(esCC ? local.mall_puerta : local.direccion),
-    tituloBonito(local.distrito),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const ubicacion = ubicacionDe(local);
 
   const whatsapp = telefonoWhatsApp(local.contacto_cel);
   const aviso = avisoUltimaVisita(local, ahora);
@@ -221,7 +215,7 @@ export default function LocalPage() {
           </>
         )}
         <Accion
-          href={enlaceMapa(local as unknown as Parada)}
+          href={enlaceMapa(local)}
           externo
           icono={<IconNavigation />}
           texto="Cómo llegar"
@@ -333,7 +327,7 @@ export default function LocalPage() {
       )}
 
       {/* ── Botón fijo ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b-min">
         <button
           onClick={() => iniciarRegistro()}
           className="btn-grad mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"

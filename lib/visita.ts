@@ -67,12 +67,42 @@ export const STATUS_LISTA: Status[] = [
   'No existe',
 ];
 
-/** Colores reservados para el resultado de la visita. */
-export const STATUS_CLS: Record<Status, { suave: string; fuerte: string }> = {
-  'Todo Ok': { suave: 'bg-ok-light text-ok', fuerte: 'border-ok bg-ok-light text-ok' },
-  Incidencia: { suave: 'bg-err-light text-err', fuerte: 'border-err bg-err-light text-err' },
-  Reprogramar: { suave: 'bg-warn-light text-warn', fuerte: 'border-warn bg-warn-light text-warn' },
-  'No existe': { suave: 'bg-gris-light text-ink-2', fuerte: 'border-ink-2 bg-gris-light text-ink-2' },
+/**
+ * Colores reservados para el resultado de la visita.
+ *
+ *  suave       chip del resumen
+ *  fuerte      borde y fondo de la tarjeta seleccionada
+ *  icono       cuadrado del ícono, visible desde el inicio
+ *  iconoActivo el mismo cuadrado, en sólido, al seleccionar
+ */
+export const STATUS_CLS: Record<
+  Status,
+  { suave: string; fuerte: string; icono: string; iconoActivo: string }
+> = {
+  'Todo Ok': {
+    suave: 'bg-ok-light text-ok',
+    fuerte: 'border-ok bg-ok-light text-ok',
+    icono: 'bg-ok-light text-ok',
+    iconoActivo: 'bg-ok text-white',
+  },
+  Incidencia: {
+    suave: 'bg-err-light text-err',
+    fuerte: 'border-err bg-err-light text-err',
+    icono: 'bg-err-light text-err',
+    iconoActivo: 'bg-err text-white',
+  },
+  Reprogramar: {
+    suave: 'bg-warn-light text-warn',
+    fuerte: 'border-warn bg-warn-light text-warn',
+    icono: 'bg-warn-light text-warn',
+    iconoActivo: 'bg-warn text-white',
+  },
+  'No existe': {
+    suave: 'bg-gris-light text-ink-2',
+    fuerte: 'border-ink-2 bg-gris-light text-ink-2',
+    icono: 'bg-gris-light text-ink-2',
+    iconoActivo: 'bg-ink-2 text-white',
+  },
 };
 
 /** Clases por motivo, con la paleta única que nunca pisa a un resultado. */

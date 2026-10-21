@@ -14,6 +14,7 @@ import {
 } from '@/lib/cacheDia';
 import {
   ordenarRuta,
+  ubicacionDe,
   siguienteParada,
   estaCompletada,
   textoEstado,
@@ -49,7 +50,7 @@ import {
   IconVideo,
   IconCheck,
   IconAlert,
-  IconMapPin,
+  IconCalendarRepeat,
   IconX,
   IconCamera,
   IconImage,
@@ -70,7 +71,7 @@ const ICONO_MOTIVO: Record<Motivo, React.ReactNode> = {
 const ICONO_STATUS: Record<Status, React.ReactNode> = {
   'Todo Ok': <IconCheck className="h-5 w-5" />,
   Incidencia: <IconAlert className="h-5 w-5" />,
-  Reprogramar: <IconMapPin className="h-5 w-5" />,
+  Reprogramar: <IconCalendarRepeat className="h-5 w-5" />,
   'No existe': <IconX className="h-5 w-5" />,
 };
 
@@ -413,10 +414,9 @@ export default function VisitaPage() {
     return <Confirmacion local={local} dia={dia} />;
   }
 
-  const ubicacion = [
-    tituloBonito(local.mall_puerta),
-    local.id_local,
-  ]
+  // La misma línea que ven Hoy y el Detalle: para puerta calle el
+  // catálogo fija mall_puerta = "Puerta Calle", que no identifica nada.
+  const ubicacion = [ubicacionDe(local), local.id_local]
     .filter(Boolean)
     .join(' · ');
 
@@ -559,7 +559,7 @@ export default function VisitaPage() {
       )}
 
       {/* ── Botones ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b-min">
         <div className="mx-auto flex max-w-md gap-2">
           {paso > 1 && (
             <button
@@ -802,14 +802,23 @@ function Paso1({
             <button
               key={s}
               onClick={() => onStatus(s)}
-              className={`flex min-h-[64px] items-center gap-2.5 rounded-2xl border p-3.5 text-left transition ${
+              className={`flex min-h-[64px] items-center gap-2.5 rounded-2xl border p-3 text-left transition ${
                 activo ? STATUS_CLS[s].fuerte : 'border-line bg-white'
               }`}
             >
-              <span className={activo ? '' : 'text-ink-2'}>
+              {/* El color del resultado se ve antes de elegir, no solo al elegir. */}
+              <span
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl transition ${
+                  activo ? STATUS_CLS[s].iconoActivo : STATUS_CLS[s].icono
+                }`}
+              >
                 {ICONO_STATUS[s]}
               </span>
-              <span className="text-[13px] font-semibold">{s}</span>
+              <span
+                className={`text-[13px] font-semibold ${activo ? '' : 'text-ink'}`}
+              >
+                {s}
+              </span>
             </button>
           );
         })}
@@ -1108,7 +1117,7 @@ function Confirmacion({
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-6 pt-10 text-center safe-t safe-b">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-6 pt-10 text-center safe-t safe-b-min">
       <span className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-ok-light text-ok">
         <IconCheck className="h-12 w-12" />
       </span>

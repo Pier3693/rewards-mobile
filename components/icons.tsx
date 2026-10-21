@@ -240,3 +240,16 @@ export function IconMic({ className = 'h-5 w-5' }: P) {
     </svg>
   );
 }
+
+/* Reprogramar: calendario con flecha de repetición.
+   No se usa un pin, que ya significa "Cómo llegar". */
+export function IconCalendarRepeat({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 12V7.5A2.5 2.5 0 0 0 17.5 5h-11A2.5 2.5 0 0 0 4 7.5v10A2.5 2.5 0 0 0 6.5 20H12" />
+      <path d="M8 3v4M16 3v4M4 10.5h16" />
+      <path d="M20.5 18.2a3 3 0 1 1-1.1-2.3" />
+      <path d="M20.6 13.8v2.6H18" />
+    </svg>
+  );
+}
