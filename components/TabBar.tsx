@@ -4,9 +4,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { IconHome, IconSearch, IconPlus, IconUser } from '@/components/icons';
 
+/**
+ * Pantallas secundarias: tienen su propia salida y no llevan barra.
+ * En el registro, además, saltar a otra pestaña a media captura sería
+ * escaparse sin pasar por la confirmación de salida.
+ */
+export const RUTAS_SIN_BARRA = ['/local/', '/visita/'];
+
+/** Lo usa también el layout, para no reservar el hueco de la barra. */
+export function hayBarraInferior(pathname: string): boolean {
+  return !RUTAS_SIN_BARRA.some((r) => pathname.startsWith(r));
+}
+
 export default function TabBar() {
   const pathname = usePathname();
   const is = (p: string) => pathname.startsWith(p);
+
+  if (!hayBarraInferior(pathname)) return null;
 
   const item = (activo: boolean) =>
     `flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-semibold transition ${

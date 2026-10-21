@@ -181,7 +181,7 @@ export default function LocalPage() {
   ].filter((f) => String(f.valor || '').trim());
 
   return (
-    <main className="mx-auto max-w-md px-5 pb-28 pt-5 safe-t">
+    <main className="mx-auto max-w-md px-5 pt-5 pb-barra safe-t">
       <Cabecera onVolver={() => router.back()} />
 
       {/* ── Identidad ── */}
@@ -333,7 +333,7 @@ export default function LocalPage() {
       )}
 
       {/* ── Botón fijo ── */}
-      <div className="fixed inset-x-0 bottom-[72px] z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b">
         <button
           onClick={() => iniciarRegistro()}
           className="btn-grad mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"

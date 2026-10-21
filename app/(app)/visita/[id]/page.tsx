@@ -421,7 +421,7 @@ export default function VisitaPage() {
     .join(' · ');
 
   return (
-    <main className="mx-auto max-w-md px-5 pb-32 pt-4 safe-t">
+    <main className="mx-auto max-w-md px-5 pt-4 pb-barra safe-t">
       {/* ── Cabecera ── */}
       <header className="flex items-center gap-2">
         <button
@@ -559,7 +559,7 @@ export default function VisitaPage() {
       )}
 
       {/* ── Botones ── */}
-      <div className="fixed inset-x-0 bottom-[72px] z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b">
         <div className="mx-auto flex max-w-md gap-2">
           {paso > 1 && (
             <button
@@ -1108,7 +1108,7 @@ function Confirmacion({
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-28 pt-10 text-center safe-t">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-6 pt-10 text-center safe-t safe-b">
       <span className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-ok-light text-ok">
         <IconCheck className="h-12 w-12" />
       </span>

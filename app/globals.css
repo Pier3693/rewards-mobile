@@ -49,6 +49,12 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
+/* Hueco para la barra de acción fija de las pantallas secundarias:
+   el botón y su relleno, más el margen inferior del iPhone. */
+.pb-barra {
+  padding-bottom: calc(7.5rem + env(safe-area-inset-bottom));
+}
+
 /* Botón principal con gradiente del mockup */
 .btn-grad {
   background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-mid) 100%);
