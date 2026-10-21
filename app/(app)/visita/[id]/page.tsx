@@ -33,6 +33,7 @@ import {
   celularEsValido,
   componerObservacion,
   claveBorrador,
+  nuevaIdVisita,
   borradorTieneAlgo,
   guardarBorrador,
   leerBorrador,
@@ -104,6 +105,12 @@ export default function VisitaPage() {
   const [materialPop, setMaterialPop] = useState('');
   const [observacion, setObservacion] = useState('');
   const [fotos, setFotos] = useState<string[]>([]);
+  /**
+   * Identificador de esta visita, fijado al abrir el formulario.
+   * Si se generara al guardar, cada reintento llevaría uno nuevo y el
+   * backend no podría reconocer el reenvío.
+   */
+  const [idVisita, setIdVisita] = useState(() => nuevaIdVisita());
 
   const [comprimiendo, setComprimiendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -217,6 +224,7 @@ export default function VisitaPage() {
   useEffect(() => {
     if (!tocado || guardada || ofreceBorrador || debeElegir) return;
     guardarBorrador(clave, {
+      idVisita,
       paso,
       motivo,
       status,
@@ -232,7 +240,7 @@ export default function VisitaPage() {
       observacion,
     });
   }, [
-    tocado, guardada, ofreceBorrador, debeElegir, clave, paso, motivo, status,
+    tocado, guardada, ofreceBorrador, debeElegir, clave, idVisita, paso, motivo, status,
     tipoIncidencia, contacto, celular, procesador, codOpenpay, codNiubiz,
     codIzipay, beneficios, materialPop, observacion,
   ]);
@@ -241,6 +249,8 @@ export default function VisitaPage() {
     const b = leerBorrador(clave);
     setOfreceBorrador(false);
     if (!b) return;
+    // El id del borrador manda: puede que ese envío ya llegara a medias.
+    if (b.idVisita) setIdVisita(b.idVisita);
     setPaso(b.paso || 1);
     if (!motivoFijo) setMotivo(b.motivo);
     setStatus(b.status);
@@ -259,6 +269,7 @@ export default function VisitaPage() {
 
   function empezarDeNuevo() {
     borrarBorrador(clave);
+    setIdVisita(nuevaIdVisita()); // visita nueva, identificador nuevo
     setOfreceBorrador(false);
   }
 
@@ -380,6 +391,7 @@ export default function VisitaPage() {
       observacion: componerObservacion(tipoIncidencia, observacion),
       fotosBase64: fotos,
       id_asignacion: idAsignacion,
+      id_visita: idVisita,
     }, { msLimite: MS_LIMITE_GUARDADO });
 
     if (!r.ok) {

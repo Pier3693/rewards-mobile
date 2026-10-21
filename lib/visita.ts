@@ -196,6 +196,8 @@ export function separarObservacion(observacion: string | undefined): {
 // ══════════════════════════════════════════════════
 
 export interface Borrador {
+  /** Identificador de ESTA visita. Ver nuevaIdVisita. */
+  idVisita: string;
   paso: number;
   motivo: Motivo | null;
   status: Status | null;
@@ -223,9 +225,32 @@ export function claveBorrador(idLocal: string, idAsignacion?: string): string {
     (idAsignacion ? `_${idAsignacion}` : '');
 }
 
+/**
+ * Identificador único de una visita, para que el backend reconozca un
+ * reenvío y no cree una fila repetida.
+ *
+ * Se genera AL ABRIR el formulario, nunca al pulsar Guardar: si se
+ * generara al guardar, cada reintento llevaría uno distinto y la
+ * deduplicación no serviría de nada. Por eso también viaja en el
+ * borrador, para sobrevivir a salir y volver.
+ */
+export function nuevaIdVisita(): string {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* navegador viejo o contexto sin crypto */
+  }
+  // Respaldo: hora más azar. No necesita ser criptográfico, solo único
+  // entre los envíos de un mismo CAP.
+  return `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** True si el borrador tiene algo que valga la pena ofrecer. */
 export function borradorTieneAlgo(b: Partial<Borrador> | null): boolean {
   if (!b) return false;
+  // El idVisita no cuenta: un borrador que solo lo tiene está vacío.
   const campos = [
     b.motivo, b.status, b.tipoIncidencia, b.contacto, b.celular,
     b.procesador, b.cod_openpay, b.cod_niubiz, b.cod_izipay,

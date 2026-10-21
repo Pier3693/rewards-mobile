@@ -8,6 +8,7 @@ import {
   separarObservacion,
   TIPOS_INCIDENCIA,
   claveBorrador,
+  nuevaIdVisita,
   borradorTieneAlgo,
   borradorCaducado,
   guardarBorrador,
@@ -113,6 +114,56 @@ describe('prefijo de incidencia', () => {
 });
 
 // ══════════════════════════════════════════════════
+describe('identificador de la visita', () => {
+  test('cada visita nueva lleva el suyo', () => {
+    const a = nuevaIdVisita();
+    const b = nuevaIdVisita();
+    assert.notEqual(a, b);
+    assert.ok(a.length > 10);
+  });
+
+  // Lo que esto protege: si el id se generara al pulsar Guardar, cada
+  // reintento llevaria uno nuevo y el backend no podria reconocerlo.
+  test('el borrador conserva el identificador entre reintentos', () => {
+    const datos = new Map<string, string>();
+    (globalThis as unknown as { window: unknown }).window = {
+      localStorage: {
+        getItem: (k: string) => datos.get(k) ?? null,
+        setItem: (k: string, v: string) => void datos.set(k, v),
+        removeItem: (k: string) => void datos.delete(k),
+      },
+    };
+
+    const clave = claveBorrador('PC-0123');
+    const id = nuevaIdVisita();
+
+    // Primer intento: se guarda el borrador con su id.
+    guardarBorrador(clave, {
+      idVisita: id,
+      paso: 3,
+      motivo: 'Visita',
+      status: 'Todo Ok',
+      tipoIncidencia: '',
+      contacto: 'Rosa',
+      celular: '',
+      procesador: '',
+      cod_openpay: '',
+      cod_niubiz: '',
+      cod_izipay: '',
+      beneficios: '',
+      material_pop: '',
+      observacion: 'Se cortó el envío',
+    });
+
+    // El CAP vuelve a entrar: debe recuperar EL MISMO id.
+    assert.equal(leerBorrador(clave)?.idVisita, id);
+  });
+
+  test('un borrador que solo tiene el identificador está vacío', () => {
+    assert.equal(borradorTieneAlgo({ idVisita: nuevaIdVisita() }), false);
+  });
+});
+
 describe('borrador', () => {
   /** localStorage mínimo, para poder probar fuera del navegador. */
   function montarStorage() {
@@ -128,6 +179,7 @@ describe('borrador', () => {
   }
 
   const base: Omit<Borrador, 'guardadoEn'> = {
+    idVisita: 'v-prueba-1',
     paso: 2,
     motivo: 'Visita',
     status: 'Incidencia',
