@@ -40,10 +40,26 @@ function fetchQueResponde(cuerpo: unknown, msRetraso = 0) {
   return () =>
     new Promise<Response>((resolver) => {
       setTimeout(
-        () => resolver({ json: async () => cuerpo } as Response),
+        () => resolver({ status: 200, ok: true, json: async () => cuerpo } as Response),
         msRetraso,
       );
     });
+}
+
+/**
+ * Un fetch que devuelve un estado de error con cuerpo que NO es JSON,
+ * como hacen Vercel o Apps Script cuando fallan antes de llegar a
+ * nuestro código.
+ */
+function fetchConEstado(estado: number) {
+  return () =>
+    Promise.resolve({
+      status: estado,
+      ok: false,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON');
+      },
+    } as unknown as Response);
 }
 
 describe('límite de tiempo', () => {
@@ -116,6 +132,50 @@ describe('límite de tiempo', () => {
     assert.equal(r.ok, false);
     assert.match(r.error || '', /no se pudo conectar|sin conexión/i);
     assert.doesNotMatch(r.error || '', /tardando demasiado/i);
+  });
+});
+
+describe('errores que devuelve la plataforma, no nuestro código', () => {
+  // Vercel corta cualquier petición de más de 4.5 MB. Un HEIC de la
+  // galería del iPhone va sin comprimir y uno solo puede pasarse.
+  test('un 413 explica que las fotos pesan demasiado', async () => {
+    globalThis.fetch = fetchConEstado(413) as typeof fetch;
+
+    const r = await api('registrarVisita', {}, { msLimite: 500 });
+
+    assert.equal(r.ok, false);
+    assert.match(r.error || '', /fotos pesan demasiado/i);
+    assert.match(r.error || '', /cámara/i); // dice qué hacer
+  });
+
+  test('un 504 avisa de revisar antes de reintentar', async () => {
+    globalThis.fetch = fetchConEstado(504) as typeof fetch;
+
+    const r = await api('registrarVisita', {}, { msLimite: 500 });
+
+    assert.equal(r.ok, false);
+    assert.match(r.error || '', /tardó demasiado/i);
+    assert.match(r.error || '', /se guardó/i);
+  });
+
+  // Antes esto reventaba: se intentaba parsear HTML como JSON.
+  test('un 500 con HTML no revienta al parsear', async () => {
+    globalThis.fetch = fetchConEstado(500) as typeof fetch;
+
+    const r = await api('getAutocompletado', {}, { msLimite: 500 });
+
+    assert.equal(r.ok, false);
+    assert.ok(r.error);
+    assert.doesNotMatch(r.error, /JSON|token/i); // nada técnico
+  });
+
+  test('una respuesta 200 se lee como siempre', async () => {
+    globalThis.fetch = fetchQueResponde({ ok: true, data: 'pong' }) as typeof fetch;
+
+    const r = await api('ping', {}, { msLimite: 500 });
+
+    assert.equal(r.ok, true);
+    assert.equal(r.data, 'pong');
   });
 });
 

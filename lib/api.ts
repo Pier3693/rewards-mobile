@@ -43,6 +43,28 @@ export interface OpcionesApi {
   msLimite?: number;
 }
 
+/**
+ * Mensaje para los errores que no vienen de nuestro código, o vacío si
+ * la respuesta se puede leer como JSON normal.
+ *
+ * El 413 importa de verdad: Vercel corta cualquier petición de más de
+ * 4.5 MB. Las fotos comprimidas no llegan ahí, pero cuando el navegador
+ * no puede decodificar una imagen —un HEIC de la galería del iPhone—
+ * lib/img.ts manda el archivo original, y uno solo puede pasarse.
+ */
+function mensajePorEstado(estado: number): string {
+  if (estado === 413) {
+    return 'Las fotos pesan demasiado. Quita una o tómalas con la cámara en vez de elegirlas de la galería.';
+  }
+  if (estado === 504) {
+    return 'El servidor tardó demasiado en responder. Revisa si la visita se guardó antes de reintentar.';
+  }
+  if (estado >= 500) {
+    return 'El servidor no está disponible en este momento. Intenta de nuevo.';
+  }
+  return '';
+}
+
 /** True si el fallo vino de nuestro propio aborto por tiempo. */
 function esAborto(e: unknown): boolean {
   return !!e && typeof e === 'object' && (e as { name?: string }).name === 'AbortError';
@@ -67,6 +89,12 @@ export async function api<T = unknown>(
       body: JSON.stringify({ action, token: getToken(), ...params }),
       signal: control.signal,
     });
+
+    // Algunos errores los devuelve la plataforma antes de llegar a
+    // nuestro proxy, con un cuerpo que no es JSON. Hay que mirarlos por
+    // estado o res.json() revienta y el CAP ve un error genérico.
+    const porEstado = mensajePorEstado(res.status);
+    if (porEstado) return { ok: false, error: porEstado };
 
     const json = (await res.json()) as ApiResponse<T>;
 
