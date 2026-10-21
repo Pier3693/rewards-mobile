@@ -12,7 +12,7 @@ import { api } from '@/lib/api';
 import { comprimirImagen } from '@/lib/img';
 import BottomSheet from '@/components/BottomSheet';
 import { IconCamera, IconX } from '@/components/icons';
-import type { Local } from '@/components/FormularioVisita';
+import type { Local } from '@/lib/visita';
 
 export const MOTIVOS_CAMPANA = [
   'Branding',

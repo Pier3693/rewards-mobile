@@ -16,45 +16,28 @@ import {
   IconAlert,
 } from '@/components/icons';
 
-export interface Local {
-  id_local: string;
-  comercio: string;
-  mall_puerta: string;
-  direccion: string;
-  distrito: string;
-  kam: string;
-  ultimo_status?: string;
-  [k: string]: unknown;
-}
+import {
+  MOTIVOS as MOTIVOS_DATOS,
+  type Local,
+  type Autocompletado,
+  type Motivo,
+  type Status,
+} from '@/lib/visita';
 
-export interface Autocompletado {
-  id_local: string;
-  comercio: string;
-  mall_puerta: string;
-  direccion: string;
-  kam: string;
-  procesador_pos: string;
-  codigo_openpay: string;
-  codigo_niubiz: string;
-  codigo_izipay: string;
-  beneficios: string;
-  material_pop: string;
-  contacto_nombre: string;
-  contacto_cel: string;
-  ultima_visita: string;
-  ultimo_status: string;
-  ultima_observacion: string;
-}
+export type { Local, Autocompletado, Motivo, Status };
 
-export type Motivo = 'Visita' | 'Branding' | 'Capacitación Presencial' | 'Capacitación Virtual';
-export type Status = 'Todo Ok' | 'Incidencia' | 'Reprogramar' | 'No existe';
+/** Los mismos motivos de lib/visita, con su ícono para pintarlos. */
+const ICONO_MOTIVO: Record<Motivo, React.ReactNode> = {
+  Visita: <IconStore />,
+  Branding: <IconMegaphone />,
+  'Capacitación Presencial': <IconUsers />,
+  'Capacitación Virtual': <IconVideo />,
+};
 
-export const MOTIVOS: { valor: Motivo; label: string; icon: React.ReactNode; tipo: 'pc' | 'cc' | 'todos' }[] = [
-  { valor: 'Visita', label: 'Puerta Calle', icon: <IconStore />, tipo: 'pc' },
-  { valor: 'Branding', label: 'Branding', icon: <IconMegaphone />, tipo: 'cc' },
-  { valor: 'Capacitación Presencial', label: 'Cap. Presencial', icon: <IconUsers />, tipo: 'todos' },
-  { valor: 'Capacitación Virtual', label: 'Cap. Virtual', icon: <IconVideo />, tipo: 'todos' },
-];
+export const MOTIVOS = MOTIVOS_DATOS.map((m) => ({
+  ...m,
+  icon: ICONO_MOTIVO[m.valor],
+}));
 
 const STATUS_CFG: Record<Status, { bg: string; text: string; icon: React.ReactNode }> = {
   'Todo Ok': { bg: 'bg-ok-light', text: 'text-ok', icon: <IconCheck className="h-4 w-4" /> },
