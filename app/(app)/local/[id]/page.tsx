@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { getRutaDeHoy, asignacionDeLocal, type DiaData } from '@/lib/cacheDia';
+import {
+  getRutaDeHoy,
+  asignacionesDeLocal,
+  asignacionesPendientesDeLocal,
+  type DiaData,
+} from '@/lib/cacheDia';
 import {
   avisoUltimaVisita,
   diasDesde,
@@ -17,6 +22,7 @@ import { separarObservacion } from '@/lib/visita';
 import {
   estadoTemporal,
   textoEstado,
+  estaCompletada,
   enlaceMeet,
   tieneMeet,
   meetEsUrgente,
@@ -92,18 +98,27 @@ export default function LocalPage() {
     return () => clearInterval(t);
   }, []);
 
-  /** La parada de hoy de este local, si la hay. */
-  const asignacion = useMemo(() => asignacionDeLocal(dia, id), [dia, id]);
+  /** Todas las paradas de hoy de este local: puede tener más de una. */
+  const asignaciones = useMemo(() => asignacionesDeLocal(dia, id), [dia, id]);
+  const pendientes = useMemo(
+    () => asignacionesPendientesDeLocal(dia, id),
+    [dia, id],
+  );
 
   /**
    * El motivo ya no se pregunta aquí: lo elige el paso 1 del registro.
    * Si el local está en la ruta, se manda la asignación para que quede
    * completada con su resultado.
    */
-  function iniciarRegistro() {
-    const asg = asignacion?.id_asignacion
-      ? `?asg=${encodeURIComponent(asignacion.id_asignacion)}`
-      : '';
+  /**
+   * Con una sola pendiente se manda su id. Con varias no se manda
+   * ninguno: el registro preguntará cuál, porque elegir a ciegas
+   * escribiría el resultado en la fila equivocada.
+   */
+  function iniciarRegistro(idAsignacion?: string) {
+    const elegida =
+      idAsignacion || (pendientes.length === 1 ? pendientes[0].id_asignacion : '');
+    const asg = elegida ? `?asg=${encodeURIComponent(elegida)}` : '';
     router.push(`/visita/${encodeURIComponent(id)}${asg}`);
   }
 
@@ -221,8 +236,30 @@ export default function LocalPage() {
         </button>
       </div>
 
-      {/* ── Asignación de hoy ── */}
-      {asignacion && <BloqueAsignacion p={asignacion} ahora={ahora} />}
+      {/* ── Asignaciones de hoy ── */}
+      {asignaciones.length > 0 && (
+        <section className="mt-5">
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-2">
+            En tu ruta de hoy
+            {asignaciones.length > 1 && ` (${asignaciones.length})`}
+          </h2>
+          <div className="space-y-2.5">
+            {asignaciones.map((p) => (
+              <BloqueAsignacion
+                key={p.id_asignacion}
+                p={p}
+                ahora={ahora}
+                /* Con una sola, el botón fijo de abajo ya la registra. */
+                onRegistrar={
+                  asignaciones.length > 1 && !estaCompletada(p)
+                    ? () => iniciarRegistro(p.id_asignacion)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Última visita ── */}
       <h2 className="mb-2 mt-6 text-[11px] font-bold uppercase tracking-wider text-ink-2">
@@ -298,7 +335,7 @@ export default function LocalPage() {
       {/* ── Botón fijo ── */}
       <div className="fixed inset-x-0 bottom-[72px] z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b">
         <button
-          onClick={iniciarRegistro}
+          onClick={() => iniciarRegistro()}
           className="btn-grad mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"
         >
           <IconPlay className="h-[18px] w-[18px]" />
@@ -379,65 +416,94 @@ function Accion({
   );
 }
 
-/** Los datos de la parada de hoy, cuando el local está en la ruta. */
-function BloqueAsignacion({ p, ahora }: { p: Parada; ahora: Date }) {
+/** Una parada de hoy de este local. Puede haber varias. */
+function BloqueAsignacion({
+  p,
+  ahora,
+  onRegistrar,
+}: {
+  p: Parada;
+  ahora: Date;
+  onRegistrar?: () => void;
+}) {
   const estado = estadoTemporal(p, ahora);
   const meet = enlaceMeet(p);
   const urgente = tieneMeet(p) && meetEsUrgente(p, ahora);
+  const hecha = estaCompletada(p);
+  const resultado = String(p.resultado || '').trim();
 
   return (
-    <section className="mt-5">
-      <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-2">
-        En tu ruta de hoy
-      </h2>
-      <div className="card border border-primary/25 p-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {estado !== 'flexible' && (
-            <span
-              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${
-                estado === 'atrasada'
-                  ? 'bg-gris-light text-ink'
-                  : 'bg-primary-light text-primary'
-              }`}
-            >
-              <IconClock className="h-3.5 w-3.5" />
-              {textoEstado(p, ahora)}
-            </span>
-          )}
-          {p.motivo && (
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                MOTIVO_CLS[p.motivo] || 'bg-gris-light text-ink-2'
-              }`}
-            >
-              {p.motivo}
-            </span>
-          )}
-        </div>
-
-        {indicacionesLimpias(p) && (
-          <p className="mt-2.5 rounded-xl bg-gris-light px-3 py-2 text-[12.5px] text-ink">
-            {indicacionesLimpias(p)}
-          </p>
-        )}
-
-        {meet && (
-          <a
-            href={meet}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`mt-2.5 flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] ${
-              urgente
-                ? 'bg-motivo-virtual text-white'
-                : 'bg-motivo-virtual-light text-motivo-virtual'
+    <div
+      className={`card border p-4 ${
+        hecha ? 'border-line opacity-60' : 'border-primary/25'
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        {estado !== 'flexible' && (
+          <span
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+              estado === 'atrasada'
+                ? 'bg-gris-light text-ink'
+                : 'bg-primary-light text-primary'
             }`}
           >
-            <IconVideo className="h-[18px] w-[18px]" />
-            {urgente ? 'Unirse ahora' : 'Unirse'}
-          </a>
+            <IconClock className="h-3.5 w-3.5" />
+            {textoEstado(p, ahora)}
+          </span>
+        )}
+        {p.motivo && (
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+              MOTIVO_CLS[p.motivo] || 'bg-gris-light text-ink-2'
+            }`}
+          >
+            {p.motivo}
+          </span>
+        )}
+        {hecha && (
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+              RESULTADO_CLS[resultado] || 'bg-ok-light text-ok'
+            }`}
+          >
+            {resultado || 'Hecha'}
+          </span>
         )}
       </div>
-    </section>
+
+      {indicacionesLimpias(p) && (
+        <p className="mt-2.5 rounded-xl bg-gris-light px-3 py-2 text-[12.5px] text-ink">
+          {indicacionesLimpias(p)}
+        </p>
+      )}
+
+      {meet && !hecha && (
+        <a
+          href={meet}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`mt-2.5 flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-[14px] font-semibold active:scale-[0.98] ${
+            urgente
+              ? 'bg-motivo-virtual text-white'
+              : 'bg-motivo-virtual-light text-motivo-virtual'
+          }`}
+        >
+          <IconVideo className="h-[18px] w-[18px]" />
+          {urgente ? 'Unirse ahora' : 'Unirse'}
+        </a>
+      )}
+
+      {/* Con varias pendientes, cada una se registra por separado. */}
+      {onRegistrar && (
+        <button
+          onClick={onRegistrar}
+          className="mt-2.5 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-primary text-[14px] font-semibold text-white active:scale-[0.98]"
+        >
+          <IconPlay className="h-[18px] w-[18px]" />
+          Registrar esta
+        </button>
+      )}
+    </div>
   );
 }
 

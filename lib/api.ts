@@ -5,7 +5,7 @@
 //  - Maneja expiración de sesión (authError)
 // ══════════════════════════════════════════════════
 
-import { getToken, clearSession, marcarSesionExpirada } from './auth';
+import { getToken, clearSession, marcarSesionExpirada } from './auth.ts';
 
 // El cliente SIEMPRE habla con nuestro propio backend (mismo origen).
 // Es /api/gs (server-side) quien reenvía a Apps Script, evitando CORS.

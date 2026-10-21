@@ -153,6 +153,49 @@ describe('borrador', () => {
     assert.notEqual(claveBorrador('PC-0123'), claveBorrador('CC-0456'));
   });
 
+  // Asics puede estar asignado dos veces hoy: Branding y Cap. Virtual.
+  // Cada una debe llevar su propio borrador.
+  test('dos asignaciones del mismo local no comparten borrador', () => {
+    const branding = claveBorrador('CC-0456', 'ASG-BRAND');
+    const virtual = claveBorrador('CC-0456', 'ASG-VIRT');
+    assert.notEqual(branding, virtual);
+
+    guardarBorrador(branding, { ...base, observacion: 'Faltan habladores' });
+    guardarBorrador(virtual, { ...base, observacion: 'No se conectaron' });
+
+    assert.equal(leerBorrador(branding)?.observacion, 'Faltan habladores');
+    assert.equal(leerBorrador(virtual)?.observacion, 'No se conectaron');
+  });
+
+  test('el borrador de una asignación no se ve desde la otra', () => {
+    const branding = claveBorrador('CC-0456', 'ASG-BRAND');
+    const virtual = claveBorrador('CC-0456', 'ASG-VIRT');
+
+    guardarBorrador(branding, base);
+    assert.ok(leerBorrador(branding));
+    assert.equal(leerBorrador(virtual), null);
+  });
+
+  test('la visita extra tampoco comparte con las asignaciones', () => {
+    const extra = claveBorrador('CC-0456');
+    const conAsg = claveBorrador('CC-0456', 'ASG-BRAND');
+    assert.notEqual(extra, conAsg);
+
+    guardarBorrador(conAsg, base);
+    assert.equal(leerBorrador(extra), null);
+  });
+
+  test('borrar el de una deja intacto el de la otra', () => {
+    const branding = claveBorrador('CC-0456', 'ASG-BRAND');
+    const virtual = claveBorrador('CC-0456', 'ASG-VIRT');
+    guardarBorrador(branding, base);
+    guardarBorrador(virtual, base);
+
+    borrarBorrador(branding);
+    assert.equal(leerBorrador(branding), null);
+    assert.ok(leerBorrador(virtual));
+  });
+
   test('guarda y vuelve a leer lo escrito', () => {
     const clave = claveBorrador('PC-0123');
     guardarBorrador(clave, base);

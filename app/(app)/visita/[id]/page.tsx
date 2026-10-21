@@ -9,9 +9,17 @@ import {
   invalidarRutaDeHoy,
   paradasDelDia,
   asignacionDeLocal,
+  asignacionesPendientesDeLocal,
   type DiaData,
 } from '@/lib/cacheDia';
-import { ordenarRuta, siguienteParada, estaCompletada, type Parada } from '@/lib/ruta';
+import {
+  ordenarRuta,
+  siguienteParada,
+  estaCompletada,
+  textoEstado,
+  estadoTemporal,
+  type Parada,
+} from '@/lib/ruta';
 import { tituloBonito } from '@/lib/texto';
 import {
   MOTIVOS,
@@ -104,16 +112,43 @@ export default function VisitaPage() {
   const [confirmaSalida, setConfirmaSalida] = useState(false);
   const [guardada, setGuardada] = useState(false);
   const [dictando, setDictando] = useState(false);
+  /** Asignación elegida cuando el local tiene varias pendientes hoy. */
+  const [asgElegida, setAsgElegida] = useState<string | null>(null);
+  /** El CAP dijo que no corresponde a ninguna: es una visita extra. */
+  const [esVisitaExtra, setEsVisitaExtra] = useState(false);
 
   const camaraRef = useRef<HTMLInputElement>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
   const reconocimiento = useRef<{ stop: () => void } | null>(null);
 
-  const asignacion = useMemo(
-    () => asignacionDeLocal(dia, idLocal),
+  const pendientes = useMemo(
+    () => asignacionesPendientesDeLocal(dia, idLocal),
     [dia, idLocal],
   );
-  const idAsignacion = idAsignacionUrl || asignacion?.id_asignacion || '';
+
+  /**
+   * De qué asignación es esta visita.
+   *
+   * Un local puede estar asignado dos veces el mismo día (por ejemplo
+   * Branding y Capacitación Virtual). Con varias pendientes no se elige
+   * a ciegas: se le pregunta al CAP, porque el resultado acabaría en la
+   * fila equivocada.
+   */
+  const asignacion = useMemo(() => {
+    if (esVisitaExtra) return null;
+    const todas = asignacionesPendientesDeLocal(dia, idLocal);
+    const buscado = idAsignacionUrl || asgElegida;
+    if (buscado) {
+      return todas.find((p) => p.id_asignacion === buscado) || null;
+    }
+    return asignacionDeLocal(dia, idLocal);
+  }, [dia, idLocal, idAsignacionUrl, asgElegida, esVisitaExtra]);
+
+  /** Hay que preguntar mientras no se sepa de cuál es. */
+  const debeElegir =
+    !idAsignacionUrl && !asgElegida && !esVisitaExtra && pendientes.length > 1;
+
+  const idAsignacion = asignacion?.id_asignacion || '';
   /** Con asignación, el motivo lo manda la ruta y no se puede cambiar. */
   const motivoFijo = (asignacion?.motivo as Motivo) || null;
   const clave = claveBorrador(idLocal, idAsignacion);
@@ -146,13 +181,22 @@ export default function VisitaPage() {
     setBeneficios(a.beneficios || '');
     setMaterialPop(a.material_pop || '');
 
-    const borrador = leerBorrador(clave);
-    if (borradorTieneAlgo(borrador)) setOfreceBorrador(true);
-  }, [idLocal, clave]);
+  }, [idLocal]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  /**
+   * El borrador se lee aparte porque su clave depende de la asignación,
+   * que solo se conoce al llegar la ruta del día. Si esto viviera dentro
+   * de `cargar`, cambiar la clave volvería a disparar la carga y se
+   * pediría el local dos veces a Apps Script.
+   */
+  useEffect(() => {
+    if (cargando || debeElegir || guardada) return;
+    if (borradorTieneAlgo(leerBorrador(clave))) setOfreceBorrador(true);
+  }, [cargando, debeElegir, guardada, clave]);
 
   useEffect(() => {
     if (motivoFijo) setMotivo(motivoFijo);
@@ -160,7 +204,7 @@ export default function VisitaPage() {
 
   // ── Borrador automático ────────────────────────
   useEffect(() => {
-    if (!tocado || guardada || ofreceBorrador) return;
+    if (!tocado || guardada || ofreceBorrador || debeElegir) return;
     guardarBorrador(clave, {
       paso,
       motivo,
@@ -177,7 +221,7 @@ export default function VisitaPage() {
       observacion,
     });
   }, [
-    tocado, guardada, ofreceBorrador, clave, paso, motivo, status,
+    tocado, guardada, ofreceBorrador, debeElegir, clave, paso, motivo, status,
     tipoIncidencia, contacto, celular, procesador, codOpenpay, codNiubiz,
     codIzipay, beneficios, materialPop, observacion,
   ]);
@@ -553,8 +597,18 @@ export default function VisitaPage() {
         </div>
       </div>
 
+      {/* ── Varias asignaciones hoy: hay que preguntar cuál ── */}
+      {debeElegir && (
+        <ElegirAsignacion
+          pendientes={pendientes}
+          comercio={local.comercio}
+          onElegir={(id) => setAsgElegida(id)}
+          onExtra={() => setEsVisitaExtra(true)}
+        />
+      )}
+
       {/* ── Borrador ── */}
-      {ofreceBorrador && (
+      {!debeElegir && ofreceBorrador && (
         <BottomSheet
           titulo="Tienes un registro sin terminar"
           subtitulo={local.comercio}
@@ -607,6 +661,81 @@ export default function VisitaPage() {
         </BottomSheet>
       )}
     </main>
+  );
+}
+
+// ══════════════════════════════════════════════════
+//  ¿Cuál de las asignaciones de hoy?
+//
+//  Solo aparece cuando el local tiene más de una pendiente y la URL no
+//  dice cuál. Sin esto se elegía la primera en silencio y el resultado
+//  acababa en la fila equivocada.
+// ══════════════════════════════════════════════════
+function ElegirAsignacion({
+  pendientes,
+  comercio,
+  onElegir,
+  onExtra,
+}: {
+  pendientes: Parada[];
+  comercio: string;
+  onElegir: (idAsignacion: string) => void;
+  onExtra: () => void;
+}) {
+  const ahora = new Date();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/40">
+      <div className="animate-sheet-up flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-white">
+        <div className="flex justify-center pt-2.5">
+          <span className="h-1.5 w-10 rounded-full bg-line" />
+        </div>
+
+        <div className="px-5 pb-3 pt-3">
+          <p className="text-lg font-bold">¿Cuál estás registrando?</p>
+          <p className="text-[13px] text-ink-2">
+            {comercio} tiene {pendientes.length} visitas asignadas para hoy
+          </p>
+        </div>
+
+        <div className="space-y-2.5 overflow-y-auto px-5 pb-6">
+          {pendientes.map((p) => {
+            const estado = estadoTemporal(p, ahora);
+            return (
+              <button
+                key={p.id_asignacion}
+                onClick={() => onElegir(p.id_asignacion)}
+                className="card flex w-full items-center gap-3 border border-line p-4 text-left !shadow-none active:scale-[0.99]"
+              >
+                <span
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
+                    MOTIVO_CLS[p.motivo as Motivo] || 'bg-gris-light text-ink-2'
+                  }`}
+                >
+                  {ICONO_MOTIVO[p.motivo as Motivo] || <IconStore />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{p.motivo}</p>
+                  {estado !== 'flexible' && (
+                    <p className="text-[12.5px] text-ink-2">
+                      {textoEstado(p, ahora)}
+                    </p>
+                  )}
+                </div>
+                <IconChevronRight className="shrink-0 text-ink-2" />
+              </button>
+            );
+          })}
+
+          <button
+            onClick={onExtra}
+            className="min-h-[52px] w-full rounded-2xl bg-gris-light text-[14px] font-semibold text-ink-2 active:scale-[0.98]"
+          >
+            Ninguna, es una visita extra
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

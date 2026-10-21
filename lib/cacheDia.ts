@@ -11,8 +11,8 @@
 //  página se vuelve a pedir, así que no hay datos viejos pegados.
 // ══════════════════════════════════════════════════
 
-import { api, type ApiResponse } from './api';
-import type { Parada } from './ruta';
+import { api, type ApiResponse } from './api.ts';
+import { ordenarRuta, estaCompletada, type Parada } from './ruta.ts';
 
 export interface DiaData {
   fecha: string;
@@ -59,20 +59,46 @@ export function paradasDelDia(data: DiaData | null): Parada[] {
   return [...data.pendientes, ...data.completadas];
 }
 
+/** Todas las asignaciones de hoy de un local, ordenadas por hora. */
+export function asignacionesDeLocal(
+  data: DiaData | null,
+  idLocal: string,
+): Parada[] {
+  const id = String(idLocal || '').trim().toUpperCase();
+  if (!id) return [];
+  return ordenarRuta(
+    paradasDelDia(data).filter(
+      (p) => String(p.id_local || '').trim().toUpperCase() === id,
+    ),
+  );
+}
+
 /**
- * La asignación de hoy de un local, si la hay. Prefiere la pendiente:
- * si el mismo local se visita dos veces en el día, la que importa es la
- * que falta por hacer.
+ * Solo las que todavía se pueden registrar.
+ *
+ * El registro nunca se engancha a una asignación ya completada: hacerlo
+ * sobrescribiría su `resultado` y se perdería el de la primera visita.
+ * Si todas están hechas, la segunda visita se guarda suelta.
+ */
+export function asignacionesPendientesDeLocal(
+  data: DiaData | null,
+  idLocal: string,
+): Parada[] {
+  return asignacionesDeLocal(data, idLocal).filter((p) => !estaCompletada(p));
+}
+
+/**
+ * La asignación que se puede dar por supuesta, o null.
+ *
+ * Devuelve null cuando hay dos pendientes a propósito: un local puede
+ * estar asignado dos veces el mismo día (por ejemplo Branding y
+ * Capacitación Virtual) y elegir a ciegas escribiría el resultado en la
+ * fila equivocada. En ese caso le toca preguntar a quien llama.
  */
 export function asignacionDeLocal(
   data: DiaData | null,
   idLocal: string,
 ): Parada | null {
-  const id = String(idLocal || '').trim().toUpperCase();
-  if (!id) return null;
-  const suyas = paradasDelDia(data).filter(
-    (p) => String(p.id_local || '').trim().toUpperCase() === id,
-  );
-  if (!suyas.length) return null;
-  return suyas.find((p) => !/completad/i.test(p.status || '')) || suyas[0];
+  const pendientes = asignacionesPendientesDeLocal(data, idLocal);
+  return pendientes.length === 1 ? pendientes[0] : null;
 }
