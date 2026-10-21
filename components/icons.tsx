@@ -221,3 +221,22 @@ export function IconCopy({ className = 'h-[19px] w-[19px]' }: P) {
     </svg>
   );
 }
+
+export function IconImage({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <circle cx="8.5" cy="9.5" r="1.6" />
+      <path d="m4 17 4.5-4.5 3.5 3.5 3-3L20 17" />
+    </svg>
+  );
+}
+
+export function IconMic({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2.5" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+    </svg>
+  );
+}
