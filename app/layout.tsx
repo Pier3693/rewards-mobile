@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import InstallPrompt from '@/components/InstallPrompt';
+import ActualizacionApp from '@/components/ActualizacionApp';
 
 export const metadata: Metadata = {
   title: 'Rewards · Trade Marketing',
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body className="min-h-dvh antialiased">
         {children}
         <InstallPrompt />
+        <ActualizacionApp />
       </body>
     </html>
   );

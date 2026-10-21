@@ -16,9 +16,7 @@ export default function InstallPrompt() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
+    // El service worker lo registra ActualizacionApp.
 
     // Atajo para pruebas: ?installtest=1 ignora cualquier cierre
     // anterior guardado en localStorage (útil para probar el banner

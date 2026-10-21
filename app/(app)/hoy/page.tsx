@@ -171,8 +171,25 @@ export default function HoyPage() {
   // Con señal, se guardan en el celular los locales de la ruta para que
   // el detalle y el registro abran sin conexión.
   useEffect(() => {
-    if (!data || actualizando) return;
+    if (!data || actualizando || navigator.onLine === false) return;
     precargarLocalesDelDia(ruta.map((p) => p.id_local || ''));
+
+    // Y el service worker guarda sus páginas: /local y /visita son
+    // dinámicas, así que solo abren sin señal si ya se visitaron o se
+    // guardaron aquí.
+    const rutas = [
+      ...new Set(
+        ruta.flatMap((p) =>
+          p.id_local
+            ? [
+                `/local/${encodeURIComponent(p.id_local)}`,
+                `/visita/${encodeURIComponent(p.id_local)}`,
+              ]
+            : [],
+        ),
+      ),
+    ];
+    navigator.serviceWorker?.controller?.postMessage({ tipo: 'precalentar', rutas });
   }, [data, ruta, actualizando]);
 
   const siguiente = useMemo(() => siguienteParada(ruta, ahora), [ruta, ahora]);
