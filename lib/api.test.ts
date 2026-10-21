@@ -136,8 +136,8 @@ describe('límite de tiempo', () => {
 });
 
 describe('errores que devuelve la plataforma, no nuestro código', () => {
-  // Vercel corta cualquier petición de más de 4.5 MB. Un HEIC de la
-  // galería del iPhone va sin comprimir y uno solo puede pasarse.
+  // Vercel corta cualquier petición de más de 4.5 MB. lib/img.ts ya lo
+  // evita, pero si llegara a pasar el CAP tiene que saber qué hacer.
   test('un 413 explica que las fotos pesan demasiado', async () => {
     globalThis.fetch = fetchConEstado(413) as typeof fetch;
 
@@ -148,14 +148,25 @@ describe('errores que devuelve la plataforma, no nuestro código', () => {
     assert.match(r.error || '', /cámara/i); // dice qué hacer
   });
 
-  test('un 504 avisa de revisar antes de reintentar', async () => {
+  // Con el id_visita el reintento ya no duplica: el mensaje deja de
+  // pedirle al CAP que vaya a revisar la hoja.
+  test('un 504 se puede reintentar y ya no pide revisar si se guardó', async () => {
     globalThis.fetch = fetchConEstado(504) as typeof fetch;
 
     const r = await api('registrarVisita', {}, { msLimite: 500 });
 
     assert.equal(r.ok, false);
+    assert.equal(r.reintentable, true);
     assert.match(r.error || '', /tardó demasiado/i);
-    assert.match(r.error || '', /se guardó/i);
+    assert.doesNotMatch(r.error || '', /se guardó/i);
+  });
+
+  test('un 413 no se reintenta: reenviar lo mismo daría lo mismo', async () => {
+    globalThis.fetch = fetchConEstado(413) as typeof fetch;
+
+    const r = await api('registrarVisita', {}, { msLimite: 500 });
+
+    assert.notEqual(r.reintentable, true);
   });
 
   // Antes esto reventaba: se intentaba parsear HTML como JSON.
@@ -196,5 +207,99 @@ describe('los límites por tipo de llamada', () => {
 
   test('la carga corta a los 15 segundos', () => {
     assert.equal(MS_LIMITE_CARGA, 15_000);
+  });
+});
+
+describe('qué errores se pueden reintentar', () => {
+  test('el tiempo agotado sí', async () => {
+    globalThis.fetch = fetchQueNoResponde({ abortada: false }) as typeof fetch;
+    const r = await api('registrarVisita', {}, { msLimite: 30 });
+    assert.equal(r.reintentable, true);
+  });
+
+  test('la falta de red sí', async () => {
+    globalThis.fetch = (() =>
+      Promise.reject(new TypeError('Failed to fetch'))) as typeof fetch;
+    const r = await api('registrarVisita', {}, { msLimite: 500 });
+    assert.equal(r.reintentable, true);
+  });
+
+  test('un 500 sí', async () => {
+    globalThis.fetch = fetchConEstado(500) as typeof fetch;
+    const r = await api('registrarVisita', {}, { msLimite: 500 });
+    assert.equal(r.reintentable, true);
+  });
+
+  // El proxy devuelve sus propios fallos con estado 200 y la marca puesta.
+  test('respeta la marca que pone el proxy', async () => {
+    globalThis.fetch = fetchQueResponde({
+      ok: false,
+      reintentable: true,
+      error: 'El servidor tardó demasiado en responder.',
+    }) as typeof fetch;
+    const r = await api('registrarVisita', {}, { msLimite: 500 });
+    assert.equal(r.reintentable, true);
+  });
+
+  // Un "Status requerido" no se arregla reenviando.
+  test('una respuesta del backend no', async () => {
+    globalThis.fetch = fetchQueResponde({
+      ok: false,
+      error: 'Status requerido',
+    }) as typeof fetch;
+    const r = await api('registrarVisita', {}, { msLimite: 500 });
+    assert.notEqual(r.reintentable, true);
+  });
+});
+
+describe('sesión vencida', () => {
+  /** Un navegador mínimo con una sesión abierta. */
+  function montarNavegador() {
+    const datos = new Map<string, string>([['rw_token', 'token-de-prueba']]);
+    const storage = {
+      getItem: (k: string) => datos.get(k) ?? null,
+      setItem: (k: string, v: string) => void datos.set(k, v),
+      removeItem: (k: string) => void datos.delete(k),
+    };
+    const ventana = {
+      localStorage: storage,
+      sessionStorage: storage,
+      location: { href: '/visita/PC-0001' },
+    };
+    (globalThis as unknown as { window: unknown }).window = ventana;
+    return { datos, ventana };
+  }
+
+  const vencida = { ok: false, authError: true, error: 'Sesión expirada.' };
+
+  afterEach(() => {
+    delete (globalThis as unknown as { window?: unknown }).window;
+  });
+
+  test('por defecto borra la sesión y manda al login', async () => {
+    const { datos, ventana } = montarNavegador();
+    globalThis.fetch = fetchQueResponde(vencida) as typeof fetch;
+
+    const r = await api('getAsignacionesDia', {}, { msLimite: 500 });
+
+    assert.equal(r.authError, true);
+    assert.equal(datos.has('rw_token'), false);
+    assert.equal(ventana.location.href, '/login');
+  });
+
+  // El guardado tiene que poner a salvo la visita antes de irse.
+  test('con redirigirSiVence:false no toca nada y deja decidir', async () => {
+    const { datos, ventana } = montarNavegador();
+    globalThis.fetch = fetchQueResponde(vencida) as typeof fetch;
+
+    const r = await api(
+      'registrarVisita',
+      {},
+      { msLimite: 500, redirigirSiVence: false },
+    );
+
+    assert.equal(r.authError, true);
+    assert.equal(datos.get('rw_token'), 'token-de-prueba');
+    assert.equal(ventana.location.href, '/visita/PC-0001');
   });
 });

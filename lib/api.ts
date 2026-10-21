@@ -3,6 +3,8 @@
 //  - POST con Content-Type: text/plain → evita el
 //    preflight CORS que Apps Script no soporta
 //  - Maneja expiración de sesión (authError)
+//  - Marca qué errores se pueden reintentar: con el
+//    id_visita, reenviar un guardado ya no duplica
 //  - Toda llamada tiene límite de tiempo: sin él, una
 //    petición que nunca responde deja la pantalla
 //    colgada para siempre
@@ -36,33 +38,54 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
   authError?: boolean;
+  /**
+   * El fallo fue de camino (tiempo, red, servidor caído), no una
+   * respuesta del backend: volver a intentarlo puede funcionar.
+   */
+  reintentable?: boolean;
 }
 
 export interface OpcionesApi {
   /** Milisegundos antes de cancelar la petición. */
   msLimite?: number;
+  /**
+   * false para que una sesión vencida NO borre la sesión ni mande al
+   * login: quien llama decide. Lo usa el guardado, que antes de irse
+   * tiene que poner a salvo la visita y sus fotos.
+   */
+  redirigirSiVence?: boolean;
 }
 
 /**
- * Mensaje para los errores que no vienen de nuestro código, o vacío si
+ * Respuesta para los errores que no vienen de nuestro código, o null si
  * la respuesta se puede leer como JSON normal.
  *
- * El 413 importa de verdad: Vercel corta cualquier petición de más de
- * 4.5 MB. Las fotos comprimidas no llegan ahí, pero cuando el navegador
- * no puede decodificar una imagen —un HEIC de la galería del iPhone—
- * lib/img.ts manda el archivo original, y uno solo puede pasarse.
+ * El 413 es el límite de 4.5 MB de Vercel. lib/img.ts ya controla el
+ * peso antes de enviar, así que no debería verse; si se ve, reintentar
+ * no lo arregla.
  */
-function mensajePorEstado(estado: number): string {
+function respuestaPorEstado(estado: number): ApiResponse<never> | null {
   if (estado === 413) {
-    return 'Las fotos pesan demasiado. Quita una o tómalas con la cámara en vez de elegirlas de la galería.';
+    return {
+      ok: false,
+      error: 'Las fotos pesan demasiado. Quita una o tómalas con la cámara en vez de elegirlas de la galería.',
+    };
   }
   if (estado === 504) {
-    return 'El servidor tardó demasiado en responder. Revisa si la visita se guardó antes de reintentar.';
+    return {
+      ok: false,
+      reintentable: true,
+      error: 'El servidor tardó demasiado en responder.',
+    };
   }
   if (estado >= 500) {
-    return 'El servidor no está disponible en este momento. Intenta de nuevo.';
+    return {
+      ok: false,
+      reintentable: true,
+      error: 'El servidor no está disponible en este momento. Intenta de nuevo.',
+    };
   }
-  return '';
+  return null;
 }
 
 /** True si el fallo vino de nuestro propio aborto por tiempo. */
@@ -76,6 +99,7 @@ export async function api<T = unknown>(
   opciones: OpcionesApi = {},
 ): Promise<ApiResponse<T>> {
   const msLimite = opciones.msLimite ?? MS_LIMITE_POR_DEFECTO;
+  const redirigirSiVence = opciones.redirigirSiVence ?? true;
 
   // AbortController y no AbortSignal.timeout: el segundo no existe en
   // navegadores de teléfonos viejos y aquí no podemos permitirnos fallar.
@@ -93,15 +117,15 @@ export async function api<T = unknown>(
     // Algunos errores los devuelve la plataforma antes de llegar a
     // nuestro proxy, con un cuerpo que no es JSON. Hay que mirarlos por
     // estado o res.json() revienta y el CAP ve un error genérico.
-    const porEstado = mensajePorEstado(res.status);
-    if (porEstado) return { ok: false, error: porEstado };
+    const porEstado = respuestaPorEstado(res.status);
+    if (porEstado) return porEstado;
 
     const json = (await res.json()) as ApiResponse<T>;
 
     // Sesión expirada o token inválido → avisar y mandar al login.
     // El último usuario escrito ya quedó guardado al ingresar, así que el
     // login lo precarga y solo hay que volver a poner la contraseña.
-    if (json.authError) {
+    if (json.authError && redirigirSiVence) {
       marcarSesionExpirada();
       clearSession();
       if (typeof window !== 'undefined') window.location.href = '/login';
@@ -112,6 +136,7 @@ export async function api<T = unknown>(
     if (esAborto(e)) {
       return {
         ok: false,
+        reintentable: true,
         error: 'El servidor está tardando demasiado. Intenta de nuevo.',
       };
     }
@@ -119,6 +144,7 @@ export async function api<T = unknown>(
       typeof navigator !== 'undefined' && navigator.onLine === false;
     return {
       ok: false,
+      reintentable: true,
       error: sinRed
         ? 'Sin conexión a internet. Revisa tu señal e intenta de nuevo.'
         : 'No se pudo conectar con el servidor. Intenta de nuevo.',

@@ -36,9 +36,16 @@ const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || '';
  * `lib/api.ts` hace res.json() sin mirar el estado: cualquier otra cosa
  * acabaría en su catch genérico y el CAP vería "No se pudo conectar"
  * cuando en realidad el problema fue otro.
+ *
+ * Todos los errores de aquí son de camino, no respuestas del backend,
+ * así que van marcados como reintentables: con el id_visita, reenviar
+ * un guardado no lo duplica.
  */
 function error(mensaje: string) {
-  return Response.json({ ok: false, error: mensaje }, { status: 200 });
+  return Response.json(
+    { ok: false, reintentable: true, error: mensaje },
+    { status: 200 },
+  );
 }
 
 export async function POST(req: Request) {
@@ -88,9 +95,7 @@ export async function POST(req: Request) {
       !!e && typeof e === 'object' && (e as { name?: string }).name === 'AbortError';
 
     if (abortado) {
-      return error(
-        'El servidor tardó demasiado en responder. Revisa si la visita se guardó antes de reintentar.',
-      );
+      return error('El servidor tardó demasiado en responder.');
     }
     return error('No se pudo contactar al servidor. Intenta de nuevo.');
   } finally {
