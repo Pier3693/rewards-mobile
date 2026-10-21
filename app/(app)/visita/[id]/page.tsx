@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, MS_LIMITE_CARGA, MS_LIMITE_GUARDADO } from '@/lib/api';
 import { comprimirImagen } from '@/lib/img';
 import {
   getRutaDeHoy,
@@ -43,6 +43,7 @@ import {
   type Autocompletado,
 } from '@/lib/visita';
 import BottomSheet from '@/components/BottomSheet';
+import ErrorDeCarga from '@/components/ErrorDeCarga';
 import {
   IconStore,
   IconMegaphone,
@@ -57,7 +58,6 @@ import {
   IconMic,
   IconChevronRight,
   IconChevronLeft,
-  IconRefresh,
   IconPlay,
 } from '@/components/icons';
 
@@ -158,30 +158,40 @@ export default function VisitaPage() {
   const cargar = useCallback(async () => {
     setCargando(true);
     setErrorCarga('');
-    const [rLocal, rDia] = await Promise.all([
-      api<Autocompletado>('getAutocompletado', { id_local: idLocal }),
-      getRutaDeHoy(),
-    ]);
-    setCargando(false);
+    try {
+      const [rLocal, rDia] = await Promise.all([
+        api<Autocompletado>(
+          'getAutocompletado',
+          { id_local: idLocal },
+          { msLimite: MS_LIMITE_CARGA },
+        ),
+        getRutaDeHoy(),
+      ]);
 
-    if (!rLocal.ok || !rLocal.data) {
-      setErrorCarga(rLocal.error || 'No se encontró este local');
-      return;
+      if (!rLocal.ok || !rLocal.data) {
+        setErrorCarga(rLocal.error || 'No se encontró este local');
+        return;
+      }
+      setLocal(rLocal.data);
+      if (rDia.ok && rDia.data) setDia(rDia.data);
+
+      // Prellenado con la última visita: el CAP solo corrige lo que cambió.
+      const a = rLocal.data;
+      setContacto(a.contacto_nombre || '');
+      setCelular(a.contacto_cel || '');
+      setProcesador(a.procesador_pos || '');
+      setCodOpenpay(a.codigo_openpay || '');
+      setCodNiubiz(a.codigo_niubiz || '');
+      setCodIzipay(a.codigo_izipay || '');
+      setBeneficios(a.beneficios || '');
+      setMaterialPop(a.material_pop || '');
+    } catch {
+      setErrorCarga('No se pudo conectar con el servidor. Intenta de nuevo.');
+    } finally {
+      // Pase lo que pase. Sin esto, cualquier excepción deja el
+      // esqueleto puesto y al CAP sin un botón que tocar.
+      setCargando(false);
     }
-    setLocal(rLocal.data);
-    if (rDia.ok && rDia.data) setDia(rDia.data);
-
-    // Prellenado con la última visita: el CAP solo corrige lo que cambió.
-    const a = rLocal.data;
-    setContacto(a.contacto_nombre || '');
-    setCelular(a.contacto_cel || '');
-    setProcesador(a.procesador_pos || '');
-    setCodOpenpay(a.codigo_openpay || '');
-    setCodNiubiz(a.codigo_niubiz || '');
-    setCodIzipay(a.codigo_izipay || '');
-    setBeneficios(a.beneficios || '');
-    setMaterialPop(a.material_pop || '');
-
   }, [idLocal]);
 
   useEffect(() => {
@@ -370,7 +380,7 @@ export default function VisitaPage() {
       observacion: componerObservacion(tipoIncidencia, observacion),
       fotosBase64: fotos,
       id_asignacion: idAsignacion,
-    });
+    }, { msLimite: MS_LIMITE_GUARDADO });
 
     if (!r.ok) {
       setGuardando(false);
@@ -395,17 +405,11 @@ export default function VisitaPage() {
   if (errorCarga || !local) {
     return (
       <main className="mx-auto max-w-md px-5 pt-5 safe-t">
-        <div className="card mt-6 p-6 text-center">
-          <p className="text-sm font-medium text-err">
-            {errorCarga || 'No se encontró este local'}
-          </p>
-          <button
-            onClick={cargar}
-            className="mx-auto mt-4 flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white"
-          >
-            <IconRefresh className="h-4 w-4" /> Reintentar
-          </button>
-        </div>
+        <ErrorDeCarga
+          detalle={errorCarga}
+          onReintentar={cargar}
+          onVolver={() => router.back()}
+        />
       </main>
     );
   }

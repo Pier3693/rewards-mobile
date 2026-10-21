@@ -11,7 +11,7 @@
 //  página se vuelve a pedir, así que no hay datos viejos pegados.
 // ══════════════════════════════════════════════════
 
-import { api, type ApiResponse } from './api.ts';
+import { api, MS_LIMITE_CARGA, type ApiResponse } from './api.ts';
 import { ordenarRuta, estaCompletada, type Parada } from './ruta.ts';
 
 export interface DiaData {
@@ -29,15 +29,31 @@ let enVuelo: Promise<ApiResponse<DiaData>> | null = null;
  * Las asignaciones de hoy, de la caché si ya se pidieron.
  * @param forzar vuelve a preguntarle al backend aunque haya copia.
  */
-export async function getRutaDeHoy(forzar = false): Promise<ApiResponse<DiaData>> {
+export async function getRutaDeHoy(
+  forzar = false,
+  msLimite = MS_LIMITE_CARGA,
+): Promise<ApiResponse<DiaData>> {
   if (!forzar && guardado) return { ok: true, data: guardado };
   if (!forzar && enVuelo) return enVuelo;
 
-  enVuelo = api<DiaData>('getAsignacionesDia').then((r) => {
-    if (r.ok && r.data) guardado = r.data;
-    enVuelo = null;
-    return r;
-  });
+  // El catch y el finally no son adorno: si la promesa se rechazara,
+  // `enVuelo` quedaría apuntando a una promesa rechazada para siempre y
+  // todas las llamadas siguientes devolverían ese mismo rechazo, dejando
+  // la pantalla colgada incluso al pulsar "Reintentar".
+  enVuelo = api<DiaData>('getAsignacionesDia', {}, { msLimite })
+    .then((r) => {
+      if (r.ok && r.data) guardado = r.data;
+      return r;
+    })
+    .catch(
+      (): ApiResponse<DiaData> => ({
+        ok: false,
+        error: 'No se pudo cargar tu ruta de hoy. Intenta de nuevo.',
+      }),
+    )
+    .finally(() => {
+      enVuelo = null;
+    });
 
   return enVuelo;
 }

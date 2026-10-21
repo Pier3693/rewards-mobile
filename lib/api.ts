@@ -3,6 +3,9 @@
 //  - POST con Content-Type: text/plain → evita el
 //    preflight CORS que Apps Script no soporta
 //  - Maneja expiración de sesión (authError)
+//  - Toda llamada tiene límite de tiempo: sin él, una
+//    petición que nunca responde deja la pantalla
+//    colgada para siempre
 // ══════════════════════════════════════════════════
 
 import { getToken, clearSession, marcarSesionExpirada } from './auth.ts';
@@ -11,6 +14,23 @@ import { getToken, clearSession, marcarSesionExpirada } from './auth.ts';
 // Es /api/gs (server-side) quien reenvía a Apps Script, evitando CORS.
 const PROXY_URL = '/api/gs';
 
+/**
+ * Para cargar una pantalla. Pasado esto no vale la pena seguir
+ * esperando: mejor enseñar el error y el botón de reintentar.
+ */
+export const MS_LIMITE_CARGA = 15_000;
+
+/**
+ * Para guardar con fotos. NO es un plazo de espera, es una red de
+ * seguridad: `registrarVisita` sube hasta 4 fotos a Drive dentro de la
+ * misma petición y en 4G eso pasa de 15 s con facilidad. Cortarlo antes
+ * convertiría un guardado lento en un guardado fallido.
+ */
+export const MS_LIMITE_GUARDADO = 180_000;
+
+/** Login, búsqueda y listas: rápidas, pero sin apretar de más. */
+export const MS_LIMITE_POR_DEFECTO = 60_000;
+
 export interface ApiResponse<T = unknown> {
   ok: boolean;
   data?: T;
@@ -18,15 +38,34 @@ export interface ApiResponse<T = unknown> {
   authError?: boolean;
 }
 
+export interface OpcionesApi {
+  /** Milisegundos antes de cancelar la petición. */
+  msLimite?: number;
+}
+
+/** True si el fallo vino de nuestro propio aborto por tiempo. */
+function esAborto(e: unknown): boolean {
+  return !!e && typeof e === 'object' && (e as { name?: string }).name === 'AbortError';
+}
+
 export async function api<T = unknown>(
   action: string,
   params: Record<string, unknown> = {},
+  opciones: OpcionesApi = {},
 ): Promise<ApiResponse<T>> {
+  const msLimite = opciones.msLimite ?? MS_LIMITE_POR_DEFECTO;
+
+  // AbortController y no AbortSignal.timeout: el segundo no existe en
+  // navegadores de teléfonos viejos y aquí no podemos permitirnos fallar.
+  const control = new AbortController();
+  const temporizador = setTimeout(() => control.abort(), msLimite);
+
   try {
     const res = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, token: getToken(), ...params }),
+      signal: control.signal,
     });
 
     const json = (await res.json()) as ApiResponse<T>;
@@ -42,11 +81,23 @@ export async function api<T = unknown>(
 
     return json;
   } catch (e) {
+    if (esAborto(e)) {
+      return {
+        ok: false,
+        error: 'El servidor está tardando demasiado. Intenta de nuevo.',
+      };
+    }
+    const sinRed =
+      typeof navigator !== 'undefined' && navigator.onLine === false;
     return {
       ok: false,
-      error: navigator.onLine === false
+      error: sinRed
         ? 'Sin conexión a internet. Revisa tu señal e intenta de nuevo.'
         : 'No se pudo conectar con el servidor. Intenta de nuevo.',
     };
+  } finally {
+    // Siempre, también en el camino feliz: si no, el temporizador seguiría
+    // vivo y abortaría una petición ya terminada.
+    clearTimeout(temporizador);
   }
 }
