@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   procesarCola,
+  registrarResultado,
   esperaParaIntento,
   tocaReintentar,
   esperaEnvioManual,
@@ -14,12 +15,15 @@ import {
   ordenarPorAntiguedad,
   encoladasDeAsignacion,
   localTieneEncolada,
+  delUsuario,
   type AlmacenCola,
   type VisitaEncolada,
 } from './cola.ts';
 import type { ApiResponse } from './api.ts';
 
 const AHORA = 1_700_000_000_000;
+/** El CAP conectado en casi todas las pruebas. */
+const CORREO = 'rosa@empresa.pe';
 
 function visita(campos: Partial<VisitaEncolada> = {}): VisitaEncolada {
   return {
@@ -27,6 +31,7 @@ function visita(campos: Partial<VisitaEncolada> = {}): VisitaEncolada {
       'v-1',
       { comercio: 'Tambo+', status: 'Todo Ok' },
       { comercio: 'Tambo+', status: 'Todo Ok', idAsignacion: 'ASG-1', idLocal: 'PC-0001' },
+      CORREO,
       AHORA,
     ),
     ...campos,
@@ -95,7 +100,7 @@ describe('espera creciente', () => {
 describe('envío correcto', () => {
   test('se borra de la cola', async () => {
     const almacen = almacenFalso([visita()]);
-    const r = await procesarCola({ almacen, enviar: exito, ahora: AHORA });
+    const r = await procesarCola({ correo: CORREO, almacen, enviar: exito, ahora: AHORA });
 
     assert.equal(r.enviadas, 1);
     assert.equal(r.pendientes, 0);
@@ -111,7 +116,7 @@ describe('envío correcto', () => {
       data: { repetida: true },
     });
 
-    await procesarCola({ almacen, enviar: yaEstaba, ahora: AHORA });
+    await procesarCola({ correo: CORREO, almacen, enviar: yaEstaba, ahora: AHORA });
     assert.equal(almacen.contenido.size, 0);
   });
 
@@ -130,6 +135,7 @@ describe('envío correcto', () => {
 
     const orden: string[] = [];
     await procesarCola({
+      correo: CORREO,
       almacen,
       ahora: AHORA,
       enviar: async (p) => {
@@ -147,7 +153,7 @@ describe('envío correcto', () => {
 describe('fallo de envío', () => {
   test('la visita NO se pierde y se aplaza', async () => {
     const almacen = almacenFalso([visita()]);
-    const r = await procesarCola({ almacen, enviar: falloRed, ahora: AHORA });
+    const r = await procesarCola({ correo: CORREO, almacen, enviar: falloRed, ahora: AHORA });
 
     assert.equal(r.enviadas, 0);
     assert.equal(r.pendientes, 1);
@@ -162,11 +168,11 @@ describe('fallo de envío', () => {
   test('cada fallo alarga la espera', async () => {
     const almacen = almacenFalso([visita()]);
 
-    await procesarCola({ almacen, enviar: falloRed, ahora: AHORA });
+    await procesarCola({ correo: CORREO, almacen, enviar: falloRed, ahora: AHORA });
     const primera = almacen.contenido.get('v-1')!.proximoIntento - AHORA;
 
     const despues = almacen.contenido.get('v-1')!.proximoIntento;
-    await procesarCola({ almacen, enviar: falloRed, ahora: despues });
+    await procesarCola({ correo: CORREO, almacen, enviar: falloRed, ahora: despues });
     const segunda = almacen.contenido.get('v-1')!.proximoIntento - despues;
 
     assert.ok(segunda > primera, `${segunda} debería superar a ${primera}`);
@@ -175,6 +181,7 @@ describe('fallo de envío', () => {
   test('una excepción tampoco pierde la visita', async () => {
     const almacen = almacenFalso([visita()]);
     await procesarCola({
+      correo: CORREO,
       almacen,
       ahora: AHORA,
       enviar: async () => {
@@ -193,6 +200,7 @@ describe('fallo de envío', () => {
     const almacen = almacenFalso([agotada]);
     let intentos = 0;
     await procesarCola({
+      correo: CORREO,
       almacen,
       ahora: AHORA + 10_000_000,
       enviar: async () => {
@@ -213,6 +221,7 @@ describe('fallo de envío', () => {
     const almacen = almacenFalso([agotada]);
 
     const r = await procesarCola({
+      correo: CORREO,
       almacen,
       enviar: exito,
       ahora: AHORA,
@@ -233,7 +242,7 @@ describe('sesión vencida', () => {
       visita({ idVisita: 'v-2', creadoEn: AHORA }),
     ]);
 
-    const r = await procesarCola({ almacen, enviar: sesionVencida, ahora: AHORA });
+    const r = await procesarCola({ correo: CORREO, almacen, enviar: sesionVencida, ahora: AHORA });
 
     assert.equal(r.sesionVencida, true);
     assert.equal(r.enviadas, 0);
@@ -246,17 +255,17 @@ describe('sesión vencida', () => {
       visita({ idVisita: 'v-2', creadoEn: AHORA }),
     ]);
 
-    await procesarCola({ almacen, enviar: sesionVencida, ahora: AHORA });
+    await procesarCola({ correo: CORREO, almacen, enviar: sesionVencida, ahora: AHORA });
 
     assert.equal(almacen.contenido.get('v-2')!.intentos, 0);
   });
 
   test('al volver a entrar se envían igual', async () => {
     const almacen = almacenFalso([visita()]);
-    await procesarCola({ almacen, enviar: sesionVencida, ahora: AHORA });
+    await procesarCola({ correo: CORREO, almacen, enviar: sesionVencida, ahora: AHORA });
     assert.equal(almacen.contenido.size, 1);
 
-    const r = await procesarCola({ almacen, enviar: exito, ahora: AHORA });
+    const r = await procesarCola({ correo: CORREO, almacen, enviar: exito, ahora: AHORA });
     assert.equal(r.enviadas, 1);
     assert.equal(almacen.contenido.size, 0);
   });
@@ -265,6 +274,7 @@ describe('sesión vencida', () => {
 describe('cola vacía', () => {
   test('no hace nada y lo dice', async () => {
     const r = await procesarCola({
+      correo: CORREO,
       almacen: almacenFalso(),
       enviar: exito,
       ahora: AHORA,
@@ -306,5 +316,106 @@ describe('consultas de la cola', () => {
     assert.equal(localTieneEncolada([v1, v2], 'cc-0456'), true);
     assert.equal(localTieneEncolada([v1, v2], 'PC-9999'), false);
     assert.equal(localTieneEncolada([], 'PC-0001'), false);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('celular compartido', () => {
+  // Si entra otro CAP, sus visitas no pueden salir con el token del
+  // nuevo: quedarían registradas a nombre de quien no las hizo.
+  test('solo se envían las del CAP conectado', async () => {
+    const deRosa = visita({ idVisita: 'v-rosa' });
+    const deLuis = visita({ idVisita: 'v-luis', correo: 'luis@empresa.pe' });
+    const almacen = almacenFalso([deRosa, deLuis]);
+
+    const enviadas: string[] = [];
+    const r = await procesarCola({
+      almacen,
+      correo: CORREO,
+      ahora: AHORA,
+      enviar: async (p) => {
+        enviadas.push(String(p.comercio));
+        return { ok: true };
+      },
+    });
+
+    assert.equal(r.enviadas, 1);
+    assert.equal(enviadas.length, 1);
+    assert.ok(almacen.contenido.has('v-luis'), 'la de Luis sigue esperando a Luis');
+    assert.equal(r.pendientes, 0, 'a Rosa no le cuentan las de Luis');
+  });
+
+  test('sin usuario conectado no se envía nada', async () => {
+    const almacen = almacenFalso([visita()]);
+    const r = await procesarCola({ almacen, correo: '', enviar: exito, ahora: AHORA });
+    assert.equal(r.enviadas, 0);
+    assert.equal(almacen.contenido.size, 1);
+  });
+
+  test('el correo se compara sin mayúsculas ni espacios', () => {
+    const v = visita({ correo: ' Rosa@Empresa.pe ' });
+    assert.equal(delUsuario([v], 'rosa@empresa.pe').length, 1);
+    assert.equal(nuevaEntrada('x', {}, v.resumen, ' Rosa@Empresa.PE').correo, CORREO);
+  });
+});
+
+describe('tras el envío inmediato del formulario', () => {
+  test('guardada → se borra de la cola', async () => {
+    const almacen = almacenFalso([visita()]);
+    await registrarResultado(almacen, visita(), 'guardada', AHORA);
+    assert.equal(almacen.contenido.size, 0);
+  });
+
+  test('repetida → también se borra', async () => {
+    const almacen = almacenFalso([visita()]);
+    await registrarResultado(almacen, visita(), 'repetida', AHORA);
+    assert.equal(almacen.contenido.size, 0);
+  });
+
+  // El formulario sigue abierto con todo: el CAP lo corrige allí.
+  test('rechazo del backend → se quita de la cola', async () => {
+    const almacen = almacenFalso([visita()]);
+    await registrarResultado(almacen, visita(), 'error', AHORA);
+    assert.equal(almacen.contenido.size, 0);
+  });
+
+  test('corte por el camino → queda en la cola con el intento contado', async () => {
+    const almacen = almacenFalso([visita()]);
+    await registrarResultado(almacen, visita(), 'reintentar', AHORA, 'Sin conexión');
+
+    const v = almacen.contenido.get('v-1')!;
+    assert.equal(v.intentos, 1);
+    assert.ok(v.proximoIntento > AHORA);
+    assert.equal(v.ultimoError, 'Sin conexión');
+  });
+
+  test('sesión vencida → queda en la cola sin tocar', async () => {
+    const almacen = almacenFalso([visita()]);
+    await registrarResultado(almacen, visita(), 'sesion', AHORA);
+
+    const v = almacen.contenido.get('v-1')!;
+    assert.equal(v.intentos, 0);
+  });
+
+  // El caso completo del punto 3: se corta, queda en cola y el reintento
+  // lleva el MISMO id, que es lo que deja al backend deduplicarlo.
+  test('el reintento de la cola lleva el mismo identificador', async () => {
+    const original = visita({ payload: { id_visita: 'v-1', comercio: 'Tambo+' } });
+    const almacen = almacenFalso([original]);
+    await registrarResultado(almacen, original, 'reintentar', AHORA);
+
+    const ids: unknown[] = [];
+    await procesarCola({
+      almacen,
+      correo: CORREO,
+      ahora: AHORA + 60 * 60_000,
+      enviar: async (p) => {
+        ids.push(p.id_visita);
+        return { ok: true, data: { repetida: true } };
+      },
+    });
+
+    assert.deepEqual(ids, ['v-1']);
+    assert.equal(almacen.contenido.size, 0);
   });
 });

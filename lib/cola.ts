@@ -27,6 +27,12 @@ export interface ResumenEncolado {
 export interface VisitaEncolada {
   /** Clave primaria. El mismo que viaja como id_visita al backend. */
   idVisita: string;
+  /**
+   * De quién es. El token se pone al enviar, así que en un celular
+   * compartido solo se envían las del CAP conectado: si no, saldrían a
+   * nombre de otro.
+   */
+  correo: string;
   /** Los parámetros tal cual se mandan a `registrarVisita`. */
   payload: Record<string, unknown>;
   resumen: ResumenEncolado;
@@ -44,6 +50,18 @@ export interface AlmacenCola {
   guardar(v: VisitaEncolada): Promise<void>;
   borrar(idVisita: string): Promise<void>;
   contar(): Promise<number>;
+}
+
+/** Evento que avisa a las pantallas de que la cola cambió. */
+export const EVENTO_COLA = 'rw-cola';
+
+function avisarCambio() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new Event(EVENTO_COLA));
+  } catch {
+    /* ignorar */
+  }
 }
 
 // ── IndexedDB ─────────────────────────────────────
@@ -98,6 +116,7 @@ export const colaIndexedDB: AlmacenCola = {
 
   async guardar(v) {
     await conAlmacen('readwrite', (s) => s.put(v) as IDBRequest<IDBValidKey>);
+    avisarCambio();
   },
 
   async borrar(idVisita) {
@@ -106,6 +125,7 @@ export const colaIndexedDB: AlmacenCola = {
     } catch {
       /* si no se puede borrar, el reenvío lo deduplica el backend */
     }
+    avisarCambio();
   },
 
   async contar() {
@@ -124,21 +144,37 @@ export function ordenarPorAntiguedad(visitas: VisitaEncolada[]): VisitaEncolada[
   return [...visitas].sort((a, b) => a.creadoEn - b.creadoEn);
 }
 
-/** Crea la entrada para una visita que no se pudo enviar. */
+/** Crea la entrada de una visita para la cola. */
 export function nuevaEntrada(
   idVisita: string,
   payload: Record<string, unknown>,
   resumen: ResumenEncolado,
+  correo: string,
   ahora = Date.now(),
 ): VisitaEncolada {
   return {
     idVisita,
+    correo: normalizarCorreo(correo),
     payload,
     resumen,
     intentos: 0,
     proximoIntento: ahora,
     creadoEn: ahora,
   };
+}
+
+export function normalizarCorreo(correo: string | undefined): string {
+  return String(correo || '').trim().toLowerCase();
+}
+
+/** Solo las de ese CAP: son las únicas que se pueden enviar con su token. */
+export function delUsuario(
+  visitas: VisitaEncolada[],
+  correo: string | undefined,
+): VisitaEncolada[] {
+  const c = normalizarCorreo(correo);
+  if (!c) return [];
+  return visitas.filter((v) => normalizarCorreo(v.correo) === c);
 }
 
 /** Las que corresponden a una asignación concreta. */

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
 import TabBar, { hayBarraInferior } from '@/components/TabBar';
+import Sincronizador from '@/components/Sincronizador';
 
 export default function AppLayout({
   children,
@@ -32,6 +33,8 @@ export default function AppLayout({
     <div className={`min-h-dvh ${hayBarraInferior(pathname) ? 'pb-24' : ''}`}>
       {children}
       <TabBar />
+      {/* Envía las visitas que quedaron en el celular. */}
+      <Sincronizador />
     </div>
   );
 }

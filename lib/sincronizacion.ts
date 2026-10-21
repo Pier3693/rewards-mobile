@@ -9,8 +9,9 @@
 //  puede enviar, sigue esperando.
 // ══════════════════════════════════════════════════
 
-import type { AlmacenCola, VisitaEncolada } from './cola.ts';
+import { delUsuario, type AlmacenCola, type VisitaEncolada } from './cola.ts';
 import type { ApiResponse } from './api.ts';
+import type { TrasEnvio } from './visita.ts';
 
 /**
  * Espera entre intentos. Empieza corto, por si fue un bache de señal,
@@ -55,6 +56,11 @@ export interface ResultadoSincronizacion {
 
 export interface OpcionesSincronizacion {
   almacen: AlmacenCola;
+  /**
+   * El CAP conectado. Solo se envían sus visitas: el token es suyo, y
+   * las de otro saldrían a su nombre.
+   */
+  correo: string;
   /** Manda una visita al backend. Normalmente `api('registrarVisita', …)`. */
   enviar: (payload: Record<string, unknown>) => Promise<ApiResponse<unknown>>;
   ahora?: number;
@@ -72,12 +78,14 @@ export interface OpcionesSincronizacion {
  */
 export async function procesarCola({
   almacen,
+  correo,
   enviar,
   ahora = Date.now(),
   forzar = false,
 }: OpcionesSincronizacion): Promise<ResultadoSincronizacion> {
-  const visitas = await almacen.listar();
+  const visitas = delUsuario(await almacen.listar(), correo);
   let enviadas = 0;
+  const pendientes = async () => delUsuario(await almacen.listar(), correo).length;
 
   for (const v of visitas) {
     if (!forzar && !tocaReintentar(v, ahora)) continue;
@@ -93,11 +101,7 @@ export async function procesarCola({
 
     if (respuesta.authError) {
       // Nada de borrar: la visita tiene que sobrevivir al nuevo login.
-      return {
-        enviadas,
-        pendientes: (await almacen.contar()) ?? 0,
-        sesionVencida: true,
-      };
+      return { enviadas, pendientes: await pendientes(), sesionVencida: true };
     }
 
     if (respuesta.ok) {
@@ -111,11 +115,33 @@ export async function procesarCola({
     await aplazar(almacen, v, ahora, respuesta.error || 'No se pudo enviar');
   }
 
-  return {
-    enviadas,
-    pendientes: (await almacen.contar()) ?? 0,
-    sesionVencida: false,
-  };
+  return { enviadas, pendientes: await pendientes(), sesionVencida: false };
+}
+
+/**
+ * Lo que se hace con la entrada después del envío inmediato que hace el
+ * formulario al pulsar Guardar.
+ *
+ * - Guardada o repetida → se borra: el trabajo está hecho.
+ * - Error del backend → también se borra: el formulario sigue abierto con
+ *   todo y el CAP lo corrige allí. Reenviarlo daría lo mismo.
+ * - Corte por el camino → se cuenta el intento y queda para la cola.
+ * - Sesión vencida → no se toca: se envía al volver a entrar.
+ */
+export async function registrarResultado(
+  almacen: AlmacenCola,
+  v: VisitaEncolada,
+  resultado: TrasEnvio,
+  ahora = Date.now(),
+  error = '',
+) {
+  if (resultado === 'guardada' || resultado === 'repetida' || resultado === 'error') {
+    await almacen.borrar(v.idVisita);
+    return;
+  }
+  if (resultado === 'reintentar') {
+    await aplazar(almacen, v, ahora, error || 'No se pudo enviar');
+  }
 }
 
 async function aplazar(

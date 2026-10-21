@@ -32,7 +32,11 @@ import {
   type Parada,
 } from '@/lib/ruta';
 import { tituloBonito, horaDe } from '@/lib/texto';
-import { clearSession, marcarSesionExpirada } from '@/lib/auth';
+import { clearSession, marcarSesionExpirada, getUsuario } from '@/lib/auth';
+import { colaIndexedDB, nuevaEntrada } from '@/lib/cola';
+import { registrarResultado } from '@/lib/sincronizacion';
+import { pedirAlmacenamientoPersistente } from '@/lib/sincronizador';
+import { useConexion } from '@/lib/useConexion';
 import {
   MOTIVOS,
   STATUS_LISTA,
@@ -46,6 +50,7 @@ import {
   claveBorrador,
   nuevaIdVisita,
   queHacerTrasEnvio,
+  type TrasEnvio,
   borradorTieneAlgo,
   guardarBorrador,
   leerBorrador,
@@ -139,6 +144,12 @@ export default function VisitaPage() {
   const [puedeReintentar, setPuedeReintentar] = useState(false);
   /** La sesión venció al guardar: el botón pasa a llevar al login. */
   const [sesionVencida, setSesionVencida] = useState(false);
+  /**
+   * La visita quedó a salvo en el celular sin llegar al backend: por
+   * falta de señal o porque la sesión venció.
+   */
+  const [quedoEnCola, setQuedoEnCola] = useState<'senal' | 'sesion' | null>(null);
+  const enLinea = useConexion();
   const [tocado, setTocado] = useState(false);
   const [ofreceBorrador, setOfreceBorrador] = useState(false);
   const [confirmaSalida, setConfirmaSalida] = useState(false);
@@ -463,20 +474,70 @@ export default function VisitaPage() {
       return;
     }
 
-    const r = await api('registrarVisita', peticion, {
-      msLimite: MS_LIMITE_GUARDADO,
-      redirigirSiVence: false,
-    });
+    // Primero se guarda en el celular y después se envía: si el CAP cierra
+    // la app a mitad del envío, o se va la señal, la visita y sus fotos
+    // siguen ahí. El próximo intento de la cola se deja para después del
+    // límite de este envío, para que no salgan dos a la vez.
+    const ahora = Date.now();
+    const entrada = {
+      ...nuevaEntrada(
+        idVisita,
+        peticion,
+        {
+          comercio: local.comercio,
+          status,
+          idAsignacion,
+          idLocal: local.id_local,
+        },
+        getUsuario()?.correo || '',
+        ahora,
+      ),
+      proximoIntento: ahora + MS_LIMITE_GUARDADO + 30_000,
+    };
+    let enCola = false;
+    try {
+      await colaIndexedDB.guardar(entrada);
+      enCola = true;
+      pedirAlmacenamientoPersistente();
+    } catch {
+      // Sin IndexedDB (modo privado): se envía directo, como antes.
+    }
 
-    // `repetida` es un éxito: el backend reconoció el id porque un envío
-    // anterior sí llegó, aunque el CAP no viera la confirmación.
-    const resultado = queHacerTrasEnvio(r);
+    let resultado: TrasEnvio;
+    let mensajeError = '';
+    if (enCola && navigator.onLine === false) {
+      // Sin red no vale la pena esperar al fallo: queda en la cola.
+      resultado = 'reintentar';
+    } else {
+      const r = await api('registrarVisita', peticion, {
+        msLimite: MS_LIMITE_GUARDADO,
+        redirigirSiVence: false,
+      });
+      // `repetida` es un éxito: el backend reconoció el id porque un
+      // envío anterior sí llegó, aunque el CAP no viera la confirmación.
+      resultado = queHacerTrasEnvio(r);
+      mensajeError = r.error || '';
+    }
+
+    if (enCola) {
+      await registrarResultado(colaIndexedDB, entrada, resultado, Date.now(), mensajeError);
+    }
+
+    if (enCola && (resultado === 'reintentar' || resultado === 'sesion')) {
+      // La cola ya tiene todo, fotos incluidas: el borrador sobra.
+      borrarBorrador(clave);
+      setQuedoEnCola(resultado === 'sesion' ? 'sesion' : 'senal');
+      setGuardando(false);
+      setGuardada(true);
+      window.scrollTo({ top: 0 });
+      return;
+    }
 
     if (resultado === 'reintentar') {
       setGuardando(false);
       setPuedeReintentar(true);
       setError(
-        `${r.error || 'No pudimos confirmar el envío.'} Puedes reintentar: la visita no se duplicará.`,
+        `${mensajeError || 'No pudimos confirmar el envío.'} Puedes reintentar: la visita no se duplicará.`,
       );
       return;
     }
@@ -492,7 +553,7 @@ export default function VisitaPage() {
     }
     if (resultado === 'error') {
       setGuardando(false);
-      setError(r.error || 'No se pudo guardar la visita');
+      setError(mensajeError || 'No se pudo guardar la visita');
       return;
     }
 
@@ -523,7 +584,14 @@ export default function VisitaPage() {
   }
 
   if (guardada) {
-    return <Confirmacion local={local} dia={dia} />;
+    return (
+      <Confirmacion
+        local={local}
+        dia={dia}
+        enCola={quedoEnCola}
+        onIniciarSesion={irAlLogin}
+      />
+    );
   }
 
   // La misma línea que ven Hoy y el Detalle: para puerta calle el
@@ -574,6 +642,12 @@ export default function VisitaPage() {
           </span>
         ))}
       </div>
+
+      {!enLinea && (
+        <p className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-[12.5px] font-semibold text-warn">
+          Sin señal. Guardaremos la visita y se enviará sola al recuperar conexión.
+        </p>
+      )}
 
       {copiaDeLas > 0 && (
         <p className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-[12.5px] font-medium text-warn">
@@ -1226,9 +1300,14 @@ function Paso3({
 function Confirmacion({
   local,
   dia,
+  enCola,
+  onIniciarSesion,
 }: {
   local: Autocompletado;
   dia: DiaData | null;
+  /** La visita quedó en el celular sin llegar al backend, y por qué. */
+  enCola: 'senal' | 'sesion' | null;
+  onIniciarSesion: () => void;
 }) {
   const router = useRouter();
   const ruta = useMemo(() => ordenarRuta(paradasDelDia(dia)), [dia]);
@@ -1241,16 +1320,33 @@ function Confirmacion({
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-6 pt-10 text-center safe-t safe-b-min">
-      <span className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-ok-light text-ok">
+      <span
+        className={`mx-auto grid h-24 w-24 place-items-center rounded-full ${
+          enCola ? 'bg-warn-light text-warn' : 'bg-ok-light text-ok'
+        }`}
+      >
         <IconCheck className="h-12 w-12" />
       </span>
 
-      <h1 className="mt-5 text-[26px] font-bold">¡Visita guardada!</h1>
-      <p className="mt-2 text-[14px] text-ink-2">
-        {local.comercio}
-        {local.mall_puerta && ` · ${tituloBonito(local.mall_puerta)}`} quedó
-        registrada.
-      </p>
+      {enCola ? (
+        <>
+          <h1 className="mt-5 text-[24px] font-bold">Visita guardada en el celular</h1>
+          <p className="mt-2 text-[14px] text-ink-2">
+            {enCola === 'sesion'
+              ? 'Tu sesión venció. Inicia sesión y se enviará sola.'
+              : 'Se enviará al recuperar señal.'}
+          </p>
+        </>
+      ) : (
+        <>
+          <h1 className="mt-5 text-[26px] font-bold">¡Visita guardada!</h1>
+          <p className="mt-2 text-[14px] text-ink-2">
+            {local.comercio}
+            {local.mall_puerta && ` · ${tituloBonito(local.mall_puerta)}`} quedó
+            registrada.
+          </p>
+        </>
+      )}
 
       {total > 0 && (
         <div className="card mt-6 p-4 text-left">
@@ -1282,7 +1378,15 @@ function Confirmacion({
       )}
 
       <div className="mt-auto space-y-2 pt-8">
-        {siguiente?.id_local && (
+        {enCola === 'sesion' && (
+          <button
+            onClick={onIniciarSesion}
+            className="btn-grad flex min-h-[52px] w-full items-center justify-center rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 active:scale-[0.98]"
+          >
+            Iniciar sesión
+          </button>
+        )}
+        {enCola !== 'sesion' && siguiente?.id_local && (
           <button
             onClick={() =>
               router.replace(
