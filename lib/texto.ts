@@ -150,3 +150,26 @@ export function telefonoLegible(celular: string | undefined): string {
   const n = normalizado.slice(2);
   return `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
 }
+
+// ══════════════════════════════════════════════════
+//  Horas de actualización
+// ══════════════════════════════════════════════════
+
+/** "08:12" a partir de milisegundos epoch, en la hora del celular. */
+export function horaDe(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/**
+ * "hace un momento", "hace 5 min", "hace 2 h" — para decir cuándo se
+ * actualizó la ruta. Vacío si nunca.
+ */
+export function haceCuanto(ms: number, ahora = Date.now()): string {
+  if (!ms) return '';
+  const minutos = Math.floor(Math.max(0, ahora - ms) / 60_000);
+  if (minutos < 1) return 'hace un momento';
+  if (minutos < 60) return `hace ${minutos} min`;
+  return `hace ${Math.floor(minutos / 60)} h`;
+}

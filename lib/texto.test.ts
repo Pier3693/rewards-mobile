@@ -6,6 +6,8 @@ import {
   partirPorCoincidencia,
   telefonoWhatsApp,
   telefonoLegible,
+  horaDe,
+  haceCuanto,
 } from './texto.ts';
 
 describe('tituloBonito', () => {
@@ -132,5 +134,28 @@ describe('telefonoLegible', () => {
 
   test('si no es valido devuelve lo que habia', () => {
     assert.equal(telefonoLegible('anexo 204'), 'anexo 204');
+  });
+});
+
+describe('horas de actualización', () => {
+  test('horaDe da horas y minutos con cero delante', () => {
+    const d = new Date(2026, 9, 21, 8, 5);
+    assert.equal(horaDe(d.getTime()), '08:05');
+  });
+
+  test('haceCuanto escala de minutos a horas', () => {
+    const ahora = 1_700_000_000_000;
+    assert.equal(haceCuanto(ahora - 20_000, ahora), 'hace un momento');
+    assert.equal(haceCuanto(ahora - 5 * 60_000, ahora), 'hace 5 min');
+    assert.equal(haceCuanto(ahora - 125 * 60_000, ahora), 'hace 2 h');
+  });
+
+  test('sin fecha no dice nada', () => {
+    assert.equal(haceCuanto(0), '');
+  });
+
+  // El reloj del celular puede ir adelantado respecto a lo guardado.
+  test('una fecha futura no da negativos', () => {
+    assert.equal(haceCuanto(Date.now() + 60_000), 'hace un momento');
   });
 });

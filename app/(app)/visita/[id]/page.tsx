@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { api, MS_LIMITE_CARGA, MS_LIMITE_GUARDADO } from '@/lib/api';
+import { api, MS_LIMITE_GUARDADO } from '@/lib/api';
 import {
   comprimirImagen,
   comprimirParaQueQuepa,
@@ -19,6 +19,7 @@ import {
   paradasDelDia,
   asignacionDeLocal,
   asignacionesPendientesDeLocal,
+  getLocalDelDia,
   type DiaData,
 } from '@/lib/cacheDia';
 import {
@@ -30,7 +31,7 @@ import {
   estadoTemporal,
   type Parada,
 } from '@/lib/ruta';
-import { tituloBonito } from '@/lib/texto';
+import { tituloBonito, horaDe } from '@/lib/texto';
 import { clearSession, marcarSesionExpirada } from '@/lib/auth';
 import {
   MOTIVOS,
@@ -101,6 +102,11 @@ export default function VisitaPage() {
   const [dia, setDia] = useState<DiaData | null>(null);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
+  /**
+   * Cuándo se guardó la copia del celular que se está usando porque el
+   * backend no respondió. 0 si los datos son frescos.
+   */
+  const [copiaDeLas, setCopiaDeLas] = useState(0);
 
   const [paso, setPaso] = useState(1);
   const [motivo, setMotivo] = useState<Motivo | null>(null);
@@ -184,21 +190,21 @@ export default function VisitaPage() {
     setCargando(true);
     setErrorCarga('');
     try {
+      // Sin señal, getLocalDelDia cae a la copia del celular, que existe
+      // para los locales de la ruta de hoy.
       const [rLocal, rDia] = await Promise.all([
-        api<Autocompletado>(
-          'getAutocompletado',
-          { id_local: idLocal },
-          { msLimite: MS_LIMITE_CARGA },
-        ),
+        getLocalDelDia<Autocompletado>(idLocal),
         getRutaDeHoy(),
       ]);
+
+      if (rDia.ok && rDia.data) setDia(rDia.data);
 
       if (!rLocal.ok || !rLocal.data) {
         setErrorCarga(rLocal.error || 'No se encontró este local');
         return;
       }
       setLocal(rLocal.data);
-      if (rDia.ok && rDia.data) setDia(rDia.data);
+      setCopiaDeLas(rLocal.deCache ? rLocal.guardadoEn || 0 : 0);
 
       // Prellenado con la última visita: el CAP solo corrige lo que cambió.
       const a = rLocal.data;
@@ -568,6 +574,12 @@ export default function VisitaPage() {
           </span>
         ))}
       </div>
+
+      {copiaDeLas > 0 && (
+        <p className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-[12.5px] font-medium text-warn">
+          Datos del local de las {horaDe(copiaDeLas)}: no se pudieron actualizar.
+        </p>
+      )}
 
       {/* ── Tarjeta del local ── */}
       <div className="card mt-4 flex items-center gap-3 p-3.5">

@@ -7,8 +7,12 @@ import {
   getRutaDeHoy,
   invalidarRutaDeHoy,
   paradasDelDia,
+  rutaActualizadaEn,
+  rutaNecesitaRefresco,
+  precargarLocalesDelDia,
   type DiaData,
 } from '@/lib/cacheDia';
+import { haceCuanto } from '@/lib/texto';
 import {
   ordenarRuta,
   minutosHasta,
@@ -94,6 +98,11 @@ export default function HoyPage() {
   // Se refresca cada minuto para que "en 25 min" no quede congelado.
   const [ahora, setAhora] = useState(() => new Date());
 
+  /** Cuándo se trajo la ruta del backend, para decirlo bajo la lista. */
+  const [actualizadaEn, setActualizadaEn] = useState(0);
+  /** Se está pidiendo la ruta fresca mientras se enseña la copia. */
+  const [actualizando, setActualizando] = useState(false);
+
   const cargar = useCallback(async (forzar = false) => {
     setCargando(true);
     setError('');
@@ -104,6 +113,17 @@ export default function HoyPage() {
       return;
     }
     setData(r.data);
+    setActualizadaEn(rutaActualizadaEn());
+
+    // Lo que se pintó es la copia del celular: se enseña ya y se pide la
+    // fresca por detrás. Si no hay señal, se queda la copia.
+    if (rutaNecesitaRefresco()) {
+      setActualizando(true);
+      const fresca = await getRutaDeHoy(true);
+      setActualizando(false);
+      if (fresca.ok && fresca.data) setData(fresca.data);
+      setActualizadaEn(rutaActualizadaEn());
+    }
   }, []);
 
   /** Vuelve a preguntarle al backend, ignorando la caché. */
@@ -123,6 +143,13 @@ export default function HoyPage() {
 
   // Toda la ruta en un solo hilo, ordenada por hora.
   const ruta = useMemo(() => ordenarRuta(paradasDelDia(data)), [data]);
+
+  // Con señal, se guardan en el celular los locales de la ruta para que
+  // el detalle y el registro abran sin conexión.
+  useEffect(() => {
+    if (!data || actualizando) return;
+    precargarLocalesDelDia(ruta.map((p) => p.id_local || ''));
+  }, [data, ruta, actualizando]);
 
   const siguiente = useMemo(() => siguienteParada(ruta, ahora), [ruta, ahora]);
 
@@ -225,9 +252,23 @@ export default function HoyPage() {
             />
           )}
 
-          <h2 className="mb-3 mt-6 text-[11px] font-bold uppercase tracking-wider text-ink-2">
-            Ruta del día
-          </h2>
+          <div className="mb-3 mt-6 flex items-center justify-between gap-2">
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-ink-2">
+              Ruta del día
+            </h2>
+            {actualizadaEn > 0 && (
+              <button
+                onClick={recargar}
+                disabled={actualizando}
+                className="flex min-h-11 items-center gap-1.5 text-[12px] text-ink-2 disabled:opacity-60"
+              >
+                <IconRefresh className={`h-3.5 w-3.5 ${actualizando ? 'animate-spin' : ''}`} />
+                {actualizando
+                  ? 'Actualizando…'
+                  : `Actualizado ${haceCuanto(actualizadaEn, ahora.getTime())}`}
+              </button>
+            )}
+          </div>
           <ol className="relative">
             {ruta.map((p, i) => (
               <Fila

@@ -1,7 +1,14 @@
-import { test, describe } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  getRutaDeHoy,
+  getLocalDelDia,
+  guardarLocalDelDia,
+  localDelDiaEnCache,
+  rutaNecesitaRefresco,
+  rutaActualizadaEn,
+  borrarCacheDelDia,
   paradasDelDia,
   asignacionesDeLocal,
   asignacionesPendientesDeLocal,
@@ -179,5 +186,239 @@ describe('paradasDelDia', () => {
   test('junta pendientes y completadas', () => {
     const d = dia([virtualAsics], [parada({ id_asignacion: 'ASG-Z', status: 'Completado' })]);
     assert.equal(paradasDelDia(d).length, 2);
+  });
+});
+
+// ══════════════════════════════════════════════════
+//  Copia en el celular
+// ══════════════════════════════════════════════════
+
+/** Fecha de hoy como la escribe cacheDia (dd/MM/yyyy). */
+function hoy(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+const ROSA = { nombre: 'Rosa Diaz', correo: 'rosa@empresa.pe', rol: 'CAP' };
+
+/** Navegador mínimo: storage compartido y una sesión abierta de Rosa. */
+function montarNavegador() {
+  const datos = new Map<string, string>([
+    ['rw_token', 'token'],
+    ['rw_user', JSON.stringify(ROSA)],
+  ]);
+  const storage = {
+    getItem: (k: string) => datos.get(k) ?? null,
+    setItem: (k: string, v: string) => void datos.set(k, v),
+    removeItem: (k: string) => void datos.delete(k),
+  };
+  (globalThis as unknown as { window: unknown }).window = {
+    localStorage: storage,
+    sessionStorage: storage,
+    location: { href: '/hoy' },
+  };
+  return datos;
+}
+
+const fetchReal = globalThis.fetch;
+let llamadas = 0;
+
+/** El backend responde esto a cualquier llamada. */
+function backend(cuerpo: unknown) {
+  globalThis.fetch = (async () => {
+    llamadas++;
+    return { status: 200, ok: true, json: async () => cuerpo } as Response;
+  }) as typeof fetch;
+}
+
+function sinSenal() {
+  globalThis.fetch = (async () => {
+    llamadas++;
+    throw new TypeError('Failed to fetch');
+  }) as typeof fetch;
+}
+
+const rutaVieja = dia([otroLocal]);
+const rutaFresca = dia([otroLocal, brandingAsics]);
+
+function copiaEnDisco(
+  datos: Map<string, string>,
+  campos: Partial<{ correo: string; fecha: string; data: DiaData }> = {},
+) {
+  datos.set(
+    'rw_ruta_dia',
+    JSON.stringify({
+      correo: ROSA.correo,
+      fecha: hoy(),
+      data: rutaVieja,
+      actualizadoEn: 1000,
+      ...campos,
+    }),
+  );
+}
+
+describe('copia de la ruta en el celular', () => {
+  let datos: Map<string, string>;
+
+  beforeEach(() => {
+    datos = montarNavegador();
+    borrarCacheDelDia();
+    llamadas = 0;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = fetchReal;
+  });
+
+  test('pinta al instante sin esperar al backend', async () => {
+    copiaEnDisco(datos);
+    sinSenal();
+
+    const r = await getRutaDeHoy();
+
+    assert.equal(r.ok, true);
+    assert.equal(r.data?.pendientes.length, 1);
+    assert.equal(llamadas, 0, 'no debería haber llamado al backend');
+    assert.equal(rutaActualizadaEn(), 1000);
+  });
+
+  // El fallo que se corrige: la copia se daba por buena todo el día.
+  test('avisa de que la copia hay que refrescarla, y al refrescar la cambia', async () => {
+    copiaEnDisco(datos);
+    await getRutaDeHoy();
+    assert.equal(rutaNecesitaRefresco(), true);
+
+    backend({ ok: true, data: rutaFresca });
+    const r = await getRutaDeHoy(true);
+
+    assert.equal(r.data?.pendientes.length, 2);
+    assert.equal(rutaNecesitaRefresco(), false);
+    const enDisco = JSON.parse(datos.get('rw_ruta_dia')!);
+    assert.equal(enDisco.data.pendientes.length, 2, 'la copia también se actualiza');
+  });
+
+  test('sin señal, refrescar devuelve la copia en vez de un error', async () => {
+    copiaEnDisco(datos);
+    sinSenal();
+
+    const r = await getRutaDeHoy(true);
+
+    assert.equal(r.ok, true);
+    assert.equal(r.data?.pendientes.length, 1);
+  });
+
+  test('la ruta de ayer no se enseña', async () => {
+    copiaEnDisco(datos, { fecha: '01/01/2020' });
+    sinSenal();
+
+    const r = await getRutaDeHoy();
+
+    assert.equal(r.ok, false);
+  });
+
+  // Celular compartido: la ruta de otro CAP no se le enseña a Rosa.
+  test('la ruta de otro CAP no se enseña', async () => {
+    copiaEnDisco(datos, { correo: 'otro@empresa.pe' });
+    sinSenal();
+
+    const r = await getRutaDeHoy();
+
+    assert.equal(r.ok, false);
+  });
+
+  // La copia no debe tapar una sesión vencida: hay que ir al login.
+  test('una sesión vencida no se tapa con la copia', async () => {
+    copiaEnDisco(datos);
+    backend({ ok: false, authError: true, error: 'Sesión expirada.' });
+
+    const r = await getRutaDeHoy(true);
+
+    assert.equal(r.authError, true);
+  });
+
+  test('al cerrar sesión se borra', async () => {
+    copiaEnDisco(datos);
+    guardarLocalDelDia('PC-0001', { comercio: 'Tambo+' });
+
+    borrarCacheDelDia();
+
+    assert.equal(datos.has('rw_ruta_dia'), false);
+    assert.equal(datos.has('rw_locales_dia'), false);
+  });
+});
+
+describe('locales del día en el celular', () => {
+  let datos: Map<string, string>;
+
+  beforeEach(() => {
+    datos = montarNavegador();
+    borrarCacheDelDia();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = fetchReal;
+  });
+
+  test('con señal trae el local y lo deja guardado', async () => {
+    backend({ ok: true, data: { comercio: 'Tambo+' } });
+
+    const r = await getLocalDelDia<{ comercio: string }>('pc-0001');
+
+    assert.equal(r.data?.comercio, 'Tambo+');
+    assert.equal(r.deCache, undefined);
+    assert.equal(localDelDiaEnCache<{ comercio: string }>('PC-0001')?.datos.comercio, 'Tambo+');
+  });
+
+  test('sin señal usa la copia y dice de cuándo es', async () => {
+    guardarLocalDelDia('PC-0001', { comercio: 'Tambo+' });
+    sinSenal();
+
+    const r = await getLocalDelDia<{ comercio: string }>('PC-0001');
+
+    assert.equal(r.ok, true);
+    assert.equal(r.data?.comercio, 'Tambo+');
+    assert.equal(r.deCache, true);
+    assert.ok((r.guardadoEn || 0) > 0);
+  });
+
+  // Si el backend responde que no existe, una copia vieja no lo tapa.
+  test('un "no encontrado" del backend no se tapa con la copia', async () => {
+    guardarLocalDelDia('PC-0001', { comercio: 'Tambo+' });
+    backend({ ok: false, error: 'Local no encontrado' });
+
+    const r = await getLocalDelDia('PC-0001');
+
+    assert.equal(r.ok, false);
+  });
+
+  test('sin señal y sin copia, da error', async () => {
+    sinSenal();
+    const r = await getLocalDelDia('PC-9999');
+    assert.equal(r.ok, false);
+  });
+
+  test('al guardar se tiran los locales de otros días', () => {
+    datos.set(
+      'rw_locales_dia',
+      JSON.stringify({
+        'PC-VIEJO': { correo: ROSA.correo, fecha: '01/01/2020', guardadoEn: 1, datos: {} },
+      }),
+    );
+
+    guardarLocalDelDia('PC-0001', { comercio: 'Tambo+' });
+
+    const mapa = JSON.parse(datos.get('rw_locales_dia')!);
+    assert.deepEqual(Object.keys(mapa), ['PC-0001']);
+  });
+
+  test('el local guardado por otro CAP no se usa', () => {
+    datos.set(
+      'rw_locales_dia',
+      JSON.stringify({
+        'PC-0001': { correo: 'otro@empresa.pe', fecha: hoy(), guardadoEn: 1, datos: {} },
+      }),
+    );
+    assert.equal(localDelDiaEnCache('PC-0001'), null);
   });
 });

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { getUsuario, clearSession } from '@/lib/auth';
+import { borrarCacheDelDia } from '@/lib/cacheDia';
 import { IconLogout, IconUser, IconBell } from '@/components/icons';
 
 export default function PerfilPage() {
@@ -16,6 +17,9 @@ export default function PerfilPage() {
     .toUpperCase();
 
   function salir() {
+    // La ruta y los locales guardados son de quien se va. La cola de
+    // visitas NO se toca: se envía cuando ese CAP vuelva a entrar.
+    borrarCacheDelDia();
     clearSession();
     router.replace('/login');
   }

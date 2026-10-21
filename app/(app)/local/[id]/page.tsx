@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, MS_LIMITE_CARGA } from '@/lib/api';
 import {
   getRutaDeHoy,
+  getLocalDelDia,
   asignacionesDeLocal,
   asignacionesPendientesDeLocal,
   type DiaData,
@@ -16,7 +16,7 @@ import {
   textoParaCopiar,
   type LocalCompleto,
 } from '@/lib/locales';
-import { tituloBonito, telefonoWhatsApp, telefonoLegible } from '@/lib/texto';
+import { tituloBonito, telefonoWhatsApp, telefonoLegible, horaDe } from '@/lib/texto';
 import { separarObservacion } from '@/lib/visita';
 import {
   estadoTemporal,
@@ -68,6 +68,8 @@ export default function LocalPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  /** Cuándo se guardó la copia del celular en uso. 0 si los datos son frescos. */
+  const [copiaDeLas, setCopiaDeLas] = useState(0);
   const [ahora, setAhora] = useState(() => new Date());
 
   const cargar = useCallback(async () => {
@@ -76,12 +78,9 @@ export default function LocalPage() {
     try {
       // Las dos en paralelo: el detalle del local y la ruta del día, que
       // viene de la caché si otra pantalla ya la pidió.
+      // Sin señal, la copia del celular de los locales de la ruta de hoy.
       const [rLocal, rDia] = await Promise.all([
-        api<LocalCompleto>(
-          'getAutocompletado',
-          { id_local: id },
-          { msLimite: MS_LIMITE_CARGA },
-        ),
+        getLocalDelDia<LocalCompleto>(id),
         getRutaDeHoy(),
       ]);
 
@@ -90,6 +89,7 @@ export default function LocalPage() {
         return;
       }
       setLocal(rLocal.data);
+      setCopiaDeLas(rLocal.deCache ? rLocal.guardadoEn || 0 : 0);
       if (rDia.ok && rDia.data) setDia(rDia.data);
     } catch {
       setError('No se pudo conectar con el servidor. Intenta de nuevo.');
@@ -177,6 +177,12 @@ export default function LocalPage() {
   return (
     <main className="mx-auto max-w-md px-5 pt-5 pb-barra safe-t">
       <Cabecera onVolver={() => router.back()} />
+
+      {copiaDeLas > 0 && (
+        <p className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-center text-[12.5px] font-medium text-warn">
+          Sin conexión: datos guardados a las {horaDe(copiaDeLas)}.
+        </p>
+      )}
 
       {/* ── Identidad ── */}
       <div className="mt-4 text-center">
