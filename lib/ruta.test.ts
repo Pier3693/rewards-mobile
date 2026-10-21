@@ -30,6 +30,9 @@ import {
   fechaLarga,
   textoEspera,
   indicacionesLimpias,
+  aplicarEncoladas,
+  estaPendienteDeEnvio,
+  estaCompletada,
   type Parada,
 } from './ruta.ts';
 
@@ -374,5 +377,42 @@ describe('varios', () => {
 
   test('la fecha solo lleva mayúscula inicial y no lleva año', () => {
     assert.equal(fechaLarga(new Date(2026, 9, 20)), 'Martes, 20 de octubre');
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('visitas que esperan envío', () => {
+  const tambo = parada({ id_asignacion: 'ASG-1', status: 'Pendiente' });
+  const asics = parada({ id_asignacion: 'ASG-2', status: 'Pendiente' });
+
+  // Punto 8: para el CAP está hecha, aunque el backend no lo sepa aún.
+  test('la parada en cola cuenta como hecha, con su resultado', () => {
+    const [t, a] = aplicarEncoladas([tambo, asics], [
+      { idAsignacion: 'ASG-1', status: 'Incidencia' },
+    ]);
+    assert.equal(estaCompletada(t), true);
+    assert.equal(t.resultado, 'Incidencia');
+    assert.equal(estaPendienteDeEnvio(t), true);
+    assert.equal(estaCompletada(a), false, 'la otra sigue pendiente');
+    assert.equal(estaPendienteDeEnvio(a), false);
+  });
+
+  // Ya llegó pero la ruta no se refrescó: manda lo del backend.
+  test('si el backend ya la completó, no se toca', () => {
+    const hecha = parada({ id_asignacion: 'ASG-1', status: 'Completado', resultado: 'Todo Ok' });
+    const [h] = aplicarEncoladas([hecha], [{ idAsignacion: 'ASG-1', status: 'Incidencia' }]);
+    assert.equal(h.resultado, 'Todo Ok');
+    assert.equal(estaPendienteDeEnvio(h), false);
+  });
+
+  // Una visita extra (sin asignación) no marca ninguna parada.
+  test('una visita sin asignación no marca nada', () => {
+    const r = aplicarEncoladas([tambo], [{ idAsignacion: '', status: 'Todo Ok' }]);
+    assert.equal(estaCompletada(r[0]), false);
+  });
+
+  test('sin cola, devuelve lo mismo', () => {
+    const paradas = [tambo];
+    assert.equal(aplicarEncoladas(paradas, []), paradas);
   });
 });

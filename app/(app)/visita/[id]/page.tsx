@@ -20,8 +20,10 @@ import {
   asignacionDeLocal,
   asignacionesPendientesDeLocal,
   getLocalDelDia,
+  aplicarEncoladasAlDia,
   type DiaData,
 } from '@/lib/cacheDia';
+import { useCola } from '@/lib/useCola';
 import {
   ordenarRuta,
   ubicacionDe,
@@ -164,9 +166,27 @@ export default function VisitaPage() {
   const galeriaRef = useRef<HTMLInputElement>(null);
   const reconocimiento = useRef<{ stop: () => void } | null>(null);
 
+  // Las asignaciones con una visita en cola ya están hechas. Se excluye
+  // ESTA visita: si no, al entrar en la cola durante el guardado le
+  // cambiaría la asignación a media operación.
+  const cola = useCola();
+  const diaConCola = useMemo(
+    () =>
+      aplicarEncoladasAlDia(
+        dia,
+        cola.visitas.filter((v) => v.idVisita !== idVisita).map((v) => v.resumen),
+      ),
+    [dia, cola.visitas, idVisita],
+  );
+  /** Para el avance de la confirmación: aquí sí cuenta esta visita. */
+  const diaConTodaLaCola = useMemo(
+    () => aplicarEncoladasAlDia(dia, cola.visitas.map((v) => v.resumen)),
+    [dia, cola.visitas],
+  );
+
   const pendientes = useMemo(
-    () => asignacionesPendientesDeLocal(dia, idLocal),
-    [dia, idLocal],
+    () => asignacionesPendientesDeLocal(diaConCola, idLocal),
+    [diaConCola, idLocal],
   );
 
   /**
@@ -179,13 +199,13 @@ export default function VisitaPage() {
    */
   const asignacion = useMemo(() => {
     if (esVisitaExtra) return null;
-    const todas = asignacionesPendientesDeLocal(dia, idLocal);
+    const todas = asignacionesPendientesDeLocal(diaConCola, idLocal);
     const buscado = idAsignacionUrl || asgElegida;
     if (buscado) {
       return todas.find((p) => p.id_asignacion === buscado) || null;
     }
-    return asignacionDeLocal(dia, idLocal);
-  }, [dia, idLocal, idAsignacionUrl, asgElegida, esVisitaExtra]);
+    return asignacionDeLocal(diaConCola, idLocal);
+  }, [diaConCola, idLocal, idAsignacionUrl, asgElegida, esVisitaExtra]);
 
   /** Hay que preguntar mientras no se sepa de cuál es. */
   const debeElegir =
@@ -587,7 +607,7 @@ export default function VisitaPage() {
     return (
       <Confirmacion
         local={local}
-        dia={dia}
+        dia={diaConTodaLaCola}
         enCola={quedoEnCola}
         onIniciarSesion={irAlLogin}
       />

@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUsuario } from '@/lib/auth';
+import { getUsuario, clearSession, marcarSesionExpirada } from '@/lib/auth';
+import { useCola } from '@/lib/useCola';
 import {
   getRutaDeHoy,
   invalidarRutaDeHoy,
   paradasDelDia,
+  aplicarEncoladasAlDia,
   rutaActualizadaEn,
   rutaNecesitaRefresco,
   precargarLocalesDelDia,
@@ -25,6 +27,7 @@ import {
   ubicacionDe,
   indicacionesLimpias,
   estaCompletada,
+  estaPendienteDeEnvio,
   estadoTemporal,
   textoEstado,
   siguienteParada,
@@ -141,8 +144,29 @@ export default function HoyPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Toda la ruta en un solo hilo, ordenada por hora.
-  const ruta = useMemo(() => ordenarRuta(paradasDelDia(data)), [data]);
+  const cola = useCola();
+  const encoladas = useMemo(() => cola.visitas.map((v) => v.resumen), [cola.visitas]);
+
+  // Toda la ruta en un solo hilo, ordenada por hora. Las visitas en cola
+  // cuentan como hechas: para el CAP el trabajo ya está.
+  const ruta = useMemo(
+    () => ordenarRuta(paradasDelDia(aplicarEncoladasAlDia(data, encoladas))),
+    [data, encoladas],
+  );
+
+  // Cuando la cola envía algo, la ruta del backend ya lo tiene: se pide
+  // de nuevo, o la parada volvería a salir pendiente.
+  const enColaAntes = useRef(0);
+  useEffect(() => {
+    const ahoraEnCola = cola.visitas.length;
+    const bajo = ahoraEnCola < enColaAntes.current;
+    enColaAntes.current = ahoraEnCola;
+    if (!bajo) return;
+    getRutaDeHoy(true).then((r) => {
+      if (r.ok && r.data) setData(r.data);
+      setActualizadaEn(rutaActualizadaEn());
+    });
+  }, [cola.visitas.length]);
 
   // Con señal, se guardan en el celular los locales de la ruta para que
   // el detalle y el registro abran sin conexión.
@@ -209,6 +233,20 @@ export default function HoyPage() {
           </h1>
         </div>
       </header>
+
+      {cola.leida && (
+        <EstadoEnvio
+          pendientes={cola.visitas.length}
+          enviando={cola.enCurso}
+          sesionVencida={cola.sesionVencida}
+          onReintentar={cola.reintentar}
+          onIniciarSesion={() => {
+            marcarSesionExpirada();
+            clearSession();
+            router.replace('/login');
+          }}
+        />
+      )}
 
       {cargando ? (
         <Esqueleto />
@@ -286,6 +324,78 @@ export default function HoyPage() {
       <div className="h-6" />
 
     </main>
+  );
+}
+
+// ══════════════════════════════════════════════════
+//  Estado del envío: Sincronizado / N pendientes
+// ══════════════════════════════════════════════════
+
+/** iPhone en Safari, sin instalar: el navegador puede borrar lo guardado. */
+function esSafariSinInstalar(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const instalada =
+    (navigator as unknown as { standalone?: boolean }).standalone === true ||
+    window.matchMedia?.('(display-mode: standalone)').matches;
+  return ios && !instalada;
+}
+
+function EstadoEnvio({
+  pendientes,
+  enviando,
+  sesionVencida,
+  onReintentar,
+  onIniciarSesion,
+}: {
+  pendientes: number;
+  enviando: boolean;
+  sesionVencida: boolean;
+  onReintentar: () => void;
+  onIniciarSesion: () => void;
+}) {
+  if (!pendientes) {
+    return (
+      <p className="-mt-2 mb-4 flex items-center gap-1.5 text-[12.5px] font-medium text-ok">
+        <IconCheck className="h-3.5 w-3.5" /> Sincronizado
+      </p>
+    );
+  }
+
+  const cuantas = `${pendientes} ${pendientes === 1 ? 'visita' : 'visitas'}`;
+
+  return (
+    <div className="mb-4 rounded-2xl bg-warn-light px-4 py-3 text-warn">
+      <p className="text-[13.5px] font-semibold">
+        {sesionVencida
+          ? `Tu sesión venció: inicia sesión para enviar ${cuantas}.`
+          : `${cuantas} ${pendientes === 1 ? 'pendiente' : 'pendientes'} de envío`}
+      </p>
+      {!sesionVencida && (
+        <p className="mt-0.5 text-[12px]">
+          Están guardadas en el celular y se envían solas al haber señal.
+        </p>
+      )}
+      {esSafariSinInstalar() && (
+        <p className="mt-1 text-[12px] font-semibold">
+          Instala la app en tu pantalla de inicio para no perder visitas guardadas.
+        </p>
+      )}
+      <button
+        onClick={sesionVencida ? onIniciarSesion : onReintentar}
+        disabled={enviando}
+        className="mt-2.5 flex min-h-11 items-center gap-2 rounded-xl bg-warn px-4 text-[13px] font-semibold text-white disabled:opacity-60"
+      >
+        {sesionVencida ? (
+          'Iniciar sesión'
+        ) : (
+          <>
+            <IconRefresh className={`h-4 w-4 ${enviando ? 'animate-spin' : ''}`} />
+            {enviando ? 'Enviando…' : 'Reintentar ahora'}
+          </>
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -559,6 +669,11 @@ function Fila({
             {hecha && !resultado && (
               <span className="rounded-full bg-ok-light px-2.5 py-0.5 text-[11px] font-semibold text-ok">
                 Hecha
+              </span>
+            )}
+            {estaPendienteDeEnvio(p) && (
+              <span className="rounded-full bg-warn-light px-2.5 py-0.5 text-[11px] font-semibold text-warn">
+                Pendiente de envío
               </span>
             )}
           </div>

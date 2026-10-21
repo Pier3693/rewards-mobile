@@ -17,7 +17,13 @@
 
 import { api, MS_LIMITE_CARGA, type ApiResponse } from './api.ts';
 import { getUsuario } from './auth.ts';
-import { ordenarRuta, estaCompletada, type Parada } from './ruta.ts';
+import {
+  ordenarRuta,
+  estaCompletada,
+  aplicarEncoladas,
+  type Encolada,
+  type Parada,
+} from './ruta.ts';
 
 export interface DiaData {
   fecha: string;
@@ -308,6 +314,23 @@ export function invalidarRutaDeHoy() {
   enVuelo = null;
   actualizadoEn = 0;
   deDisco = false;
+}
+
+/**
+ * El día con las visitas en cola contadas como hechas. Así Hoy, el
+ * detalle y la confirmación no ofrecen registrar otra vez lo que ya
+ * está esperando envío.
+ */
+export function aplicarEncoladasAlDia(
+  data: DiaData | null,
+  encoladas: Encolada[],
+): DiaData | null {
+  if (!data || !encoladas.length) return data;
+  return {
+    ...data,
+    pendientes: aplicarEncoladas(data.pendientes, encoladas),
+    completadas: aplicarEncoladas(data.completadas, encoladas),
+  };
 }
 
 /** Todas las paradas del día, pendientes y hechas, sin ordenar. */

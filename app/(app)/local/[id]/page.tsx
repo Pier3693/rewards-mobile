@@ -7,8 +7,10 @@ import {
   getLocalDelDia,
   asignacionesDeLocal,
   asignacionesPendientesDeLocal,
+  aplicarEncoladasAlDia,
   type DiaData,
 } from '@/lib/cacheDia';
+import { useCola } from '@/lib/useCola';
 import {
   avisoUltimaVisita,
   diasDesde,
@@ -22,6 +24,7 @@ import {
   estadoTemporal,
   textoEstado,
   estaCompletada,
+  estaPendienteDeEnvio,
   enlaceMeet,
   tieneMeet,
   meetEsUrgente,
@@ -108,11 +111,22 @@ export default function LocalPage() {
     return () => clearInterval(t);
   }, []);
 
+  // Lo que está esperando envío cuenta como hecho: no se ofrece
+  // registrarlo otra vez.
+  const cola = useCola();
+  const diaConCola = useMemo(
+    () => aplicarEncoladasAlDia(dia, cola.visitas.map((v) => v.resumen)),
+    [dia, cola.visitas],
+  );
+
   /** Todas las paradas de hoy de este local: puede tener más de una. */
-  const asignaciones = useMemo(() => asignacionesDeLocal(dia, id), [dia, id]);
+  const asignaciones = useMemo(
+    () => asignacionesDeLocal(diaConCola, id),
+    [diaConCola, id],
+  );
   const pendientes = useMemo(
-    () => asignacionesPendientesDeLocal(dia, id),
-    [dia, id],
+    () => asignacionesPendientesDeLocal(diaConCola, id),
+    [diaConCola, id],
   );
 
   /**
@@ -467,6 +481,11 @@ function BloqueAsignacion({
             }`}
           >
             {resultado || 'Hecha'}
+          </span>
+        )}
+        {estaPendienteDeEnvio(p) && (
+          <span className="rounded-full bg-warn-light px-2.5 py-0.5 text-[11px] font-semibold text-warn">
+            Pendiente de envío
           </span>
         )}
       </div>

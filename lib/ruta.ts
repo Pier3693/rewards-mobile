@@ -260,6 +260,41 @@ export function estaCompletada(p: Parada): boolean {
   return /completad/i.test(String(p.status || ''));
 }
 
+/** Lo mínimo de una visita en cola para marcar su parada. */
+export interface Encolada {
+  idAsignacion: string;
+  status: string | null;
+}
+
+/**
+ * Marca como hechas las paradas que tienen una visita esperando envío.
+ *
+ * Para el CAP el trabajo está hecho: tiene que contar en el avance, con
+ * su resultado, aunque el backend todavía no lo sepa. Si el backend ya
+ * la dio por completada, manda lo del backend.
+ */
+export function aplicarEncoladas(paradas: Parada[], encoladas: Encolada[]): Parada[] {
+  const porAsignacion = new Map(
+    encoladas.filter((e) => e.idAsignacion).map((e) => [e.idAsignacion, e]),
+  );
+  if (!porAsignacion.size) return paradas;
+  return paradas.map((p) => {
+    const e = porAsignacion.get(p.id_asignacion);
+    if (!e || estaCompletada(p)) return p;
+    return {
+      ...p,
+      status: 'Completado',
+      resultado: e.status || p.resultado,
+      pendiente_envio: '1',
+    };
+  });
+}
+
+/** La parada cuenta como hecha, pero su visita sigue en el celular. */
+export function estaPendienteDeEnvio(p: Parada): boolean {
+  return p.pendiente_envio === '1';
+}
+
 /**
  * Una parada ya no vale la pena: se salta al elegir "Siguiente visita".
  *
