@@ -247,6 +247,44 @@ export function nuevaIdVisita(): string {
   return `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// ══════════════════════════════════════════════════
+//  Qué hacer tras enviar
+// ══════════════════════════════════════════════════
+
+export type TrasEnvio =
+  /** El backend la escribió. */
+  | 'guardada'
+  /** El backend reconoció el id_visita: ya estaba de un envío anterior. */
+  | 'repetida'
+  /** Se cortó por el camino: reenviar con el mismo id es seguro. */
+  | 'reintentar'
+  /** La sesión venció: la visita no se pierde, hay que volver a entrar. */
+  | 'sesion'
+  /** El backend la rechazó: reenviar lo mismo daría lo mismo. */
+  | 'error';
+
+/** Lo mínimo de `ApiResponse` que hace falta para decidir. */
+export interface RespuestaEnvio {
+  ok: boolean;
+  data?: unknown;
+  authError?: boolean;
+  reintentable?: boolean;
+}
+
+/**
+ * Traduce la respuesta de `registrarVisita` a lo que tiene que hacer la
+ * pantalla. Separado para poder probarlo sin React.
+ */
+export function queHacerTrasEnvio(r: RespuestaEnvio): TrasEnvio {
+  if (r.ok) {
+    const repetida = !!(r.data as { repetida?: boolean } | undefined)?.repetida;
+    return repetida ? 'repetida' : 'guardada';
+  }
+  if (r.authError) return 'sesion';
+  if (r.reintentable) return 'reintentar';
+  return 'error';
+}
+
 /** True si el borrador tiene algo que valga la pena ofrecer. */
 export function borradorTieneAlgo(b: Partial<Borrador> | null): boolean {
   if (!b) return false;

@@ -9,6 +9,7 @@ import {
   TIPOS_INCIDENCIA,
   claveBorrador,
   nuevaIdVisita,
+  queHacerTrasEnvio,
   borradorTieneAlgo,
   borradorCaducado,
   guardarBorrador,
@@ -161,6 +162,42 @@ describe('identificador de la visita', () => {
 
   test('un borrador que solo tiene el identificador está vacío', () => {
     assert.equal(borradorTieneAlgo({ idVisita: nuevaIdVisita() }), false);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('qué hacer tras enviar', () => {
+  test('guardada', () => {
+    assert.equal(queHacerTrasEnvio({ ok: true, data: { fotos: 2 } }), 'guardada');
+    assert.equal(queHacerTrasEnvio({ ok: true }), 'guardada');
+  });
+
+  // El backend reconoció el id: el primer envío sí llegó. Para el CAP es
+  // un éxito como cualquier otro.
+  test('repetida cuenta como éxito, no como error', () => {
+    assert.equal(
+      queHacerTrasEnvio({ ok: true, data: { repetida: true, fotos: 0 } }),
+      'repetida',
+    );
+  });
+
+  test('un corte por el camino se puede reintentar', () => {
+    assert.equal(
+      queHacerTrasEnvio({ ok: false, reintentable: true }),
+      'reintentar',
+    );
+  });
+
+  // La sesión manda aunque además fuera reintentable: hay que entrar.
+  test('la sesión vencida gana sobre todo lo demás', () => {
+    assert.equal(
+      queHacerTrasEnvio({ ok: false, authError: true, reintentable: true }),
+      'sesion',
+    );
+  });
+
+  test('un rechazo del backend es un error', () => {
+    assert.equal(queHacerTrasEnvio({ ok: false }), 'error');
   });
 });
 

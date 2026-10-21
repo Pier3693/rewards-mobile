@@ -28,6 +28,7 @@ import {
   type Parada,
 } from '@/lib/ruta';
 import { tituloBonito } from '@/lib/texto';
+import { clearSession, marcarSesionExpirada } from '@/lib/auth';
 import {
   MOTIVOS,
   STATUS_LISTA,
@@ -40,6 +41,7 @@ import {
   componerObservacion,
   claveBorrador,
   nuevaIdVisita,
+  queHacerTrasEnvio,
   borradorTieneAlgo,
   guardarBorrador,
   leerBorrador,
@@ -121,6 +123,13 @@ export default function VisitaPage() {
   const [comprimiendo, setComprimiendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  /**
+   * El último envío no se confirmó, pero reenviar es seguro: lleva el
+   * mismo idVisita y el backend no lo duplica.
+   */
+  const [puedeReintentar, setPuedeReintentar] = useState(false);
+  /** La sesión venció al guardar: el botón pasa a llevar al login. */
+  const [sesionVencida, setSesionVencida] = useState(false);
   const [tocado, setTocado] = useState(false);
   const [ofreceBorrador, setOfreceBorrador] = useState(false);
   const [confirmaSalida, setConfirmaSalida] = useState(false);
@@ -390,6 +399,13 @@ export default function VisitaPage() {
     window.scrollTo({ top: 0 });
   }
 
+  function irAlLogin() {
+    // El borrador ya está guardado: al volver se ofrece continuarlo.
+    marcarSesionExpirada();
+    clearSession();
+    router.replace('/login');
+  }
+
   function salir() {
     if (tocado && !guardada) return setConfirmaSalida(true);
     router.back();
@@ -400,6 +416,7 @@ export default function VisitaPage() {
     if (guardando || !local) return; // el doble toque no crea dos visitas
     setGuardando(true);
     setError('');
+    setPuedeReintentar(false);
 
     const r = await api('registrarVisita', {
       id_local: local.id_local,
@@ -421,9 +438,31 @@ export default function VisitaPage() {
       fotosBase64: fotos,
       id_asignacion: idAsignacion,
       id_visita: idVisita,
-    }, { msLimite: MS_LIMITE_GUARDADO });
+    }, { msLimite: MS_LIMITE_GUARDADO, redirigirSiVence: false });
 
-    if (!r.ok) {
+    // `repetida` es un éxito: el backend reconoció el id porque un envío
+    // anterior sí llegó, aunque el CAP no viera la confirmación.
+    const resultado = queHacerTrasEnvio(r);
+
+    if (resultado === 'reintentar') {
+      setGuardando(false);
+      setPuedeReintentar(true);
+      setError(
+        `${r.error || 'No pudimos confirmar el envío.'} Puedes reintentar: la visita no se duplicará.`,
+      );
+      return;
+    }
+    if (resultado === 'sesion') {
+      // No se redirige solo: las fotos viven en esta pantalla y el CAP
+      // tiene que saber qué va a perder antes de irse.
+      setGuardando(false);
+      setSesionVencida(true);
+      setError(
+        'Tu sesión venció. Al volver a entrar recuperarás lo que escribiste, pero tendrás que adjuntar las fotos de nuevo.',
+      );
+      return;
+    }
+    if (resultado === 'error') {
       setGuardando(false);
       setError(r.error || 'No se pudo guardar la visita');
       return;
@@ -625,7 +664,7 @@ export default function VisitaPage() {
             </button>
           ) : (
             <button
-              onClick={guardar}
+              onClick={sesionVencida ? irAlLogin : guardar}
               disabled={guardando}
               className="btn-grad flex min-h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-60"
             >
@@ -634,6 +673,10 @@ export default function VisitaPage() {
                   <span className="spinner !h-5 !w-5 !border-white/30 !border-t-white" />
                   Guardando…
                 </>
+              ) : sesionVencida ? (
+                'Iniciar sesión'
+              ) : puedeReintentar ? (
+                'Reintentar envío'
               ) : (
                 'Guardar visita'
               )}
