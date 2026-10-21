@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api, MS_LIMITE_CARGA, MS_LIMITE_GUARDADO } from '@/lib/api';
-import { comprimirImagen } from '@/lib/img';
+import {
+  comprimirImagen,
+  cabeOtraFoto,
+  pesoTotal,
+  pesoLegible,
+  TOPE_FOTOS,
+} from '@/lib/img';
 import {
   getRutaDeHoy,
   invalidarRutaDeHoy,
@@ -278,23 +284,46 @@ export default function VisitaPage() {
     if (!files || !files.length) return;
     const espacio = MAX_FOTOS - fotos.length;
     setComprimiendo(true);
-    const nuevas: string[] = [];
-    let fallidas = 0;
+    setError('');
+
+    // Se parte de las que ya hay para ir controlando el peso acumulado.
+    const aceptadas = [...fotos];
+    let noProcesables = 0;
+    let noCaben = 0;
+
     for (const f of Array.from(files).slice(0, espacio)) {
+      let comprimida: string;
       try {
-        nuevas.push(await comprimirImagen(f));
+        comprimida = await comprimirImagen(f);
       } catch {
-        fallidas++;
+        // Avisamos ahora, al elegirla, no al guardar con el formulario
+        // ya lleno. Antes se enviaba el original sin comprimir.
+        noProcesables++;
+        continue;
       }
+      if (!cabeOtraFoto(aceptadas, comprimida)) {
+        noCaben++;
+        continue;
+      }
+      aceptadas.push(comprimida);
     }
+
     setComprimiendo(false);
-    setFotos((prev) => [...prev, ...nuevas]);
+    setFotos(aceptadas);
     setTocado(true);
-    if (fallidas > 0) {
-      setError(
-        `${fallidas} foto${fallidas > 1 ? 's' : ''} no se pudo procesar. Intenta tomarla de nuevo con la cámara.`,
+
+    const avisos: string[] = [];
+    if (noProcesables > 0) {
+      avisos.push(
+        `${noProcesables === 1 ? 'Una foto no se pudo procesar' : `${noProcesables} fotos no se pudieron procesar`}. Tómalas con la cámara en vez de elegirlas de la galería.`,
       );
     }
+    if (noCaben > 0) {
+      avisos.push(
+        `${noCaben === 1 ? 'Una foto no cabe' : `${noCaben} fotos no caben`}: ya llevas ${pesoLegible(pesoTotal(aceptadas))} y el máximo por visita es ${pesoLegible(TOPE_FOTOS)}.`,
+      );
+    }
+    if (avisos.length) setError(avisos.join(' '));
   }
 
   // ── Dictado ────────────────────────────────────
@@ -984,6 +1013,7 @@ function Paso3({
         <h2 className="text-[17px] font-bold">Evidencia</h2>
         <span className="text-[12.5px] text-ink-2">
           {fotos.length} de {MAX_FOTOS} fotos
+          {fotos.length > 0 && ` · ${pesoLegible(pesoTotal(fotos))}`}
         </span>
       </div>
 
