@@ -28,12 +28,6 @@ import {
   fechaLarga,
   type Parada,
 } from '@/lib/ruta';
-import Toast from '@/components/Toast';
-import {
-  FormularioVisita,
-  type Local,
-  type Motivo,
-} from '@/components/FormularioVisita';
 import {
   IconCalendar,
   IconRefresh,
@@ -97,8 +91,6 @@ export default function HoyPage() {
   const [data, setData] = useState<DiaData | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [registrando, setRegistrando] = useState<Parada | null>(null);
-  const [toast, setToast] = useState('');
   // Se refresca cada minuto para que "en 25 min" no quede congelado.
   const [ahora, setAhora] = useState(() => new Date());
 
@@ -160,7 +152,13 @@ export default function HoyPage() {
    */
   function abrirParada(p: Parada) {
     if (p.id_local) router.push(`/local/${encodeURIComponent(p.id_local)}`);
-    else setRegistrando(p);
+  }
+
+  /** Entra directo al registro, con la asignación para que quede completada. */
+  function registrar(p: Parada) {
+    if (!p.id_local) return;
+    const asg = p.id_asignacion ? `?asg=${encodeURIComponent(p.id_asignacion)}` : '';
+    router.push(`/visita/${encodeURIComponent(p.id_local)}${asg}`);
   }
 
   const iniciales = (user?.nombre || 'C')
@@ -223,7 +221,7 @@ export default function HoyPage() {
             <SiguienteVisita
               p={siguiente}
               ahora={ahora}
-              onIniciar={() => setRegistrando(siguiente)}
+              onIniciar={() => registrar(siguiente)}
             />
           )}
 
@@ -246,31 +244,6 @@ export default function HoyPage() {
 
       <div className="h-6" />
 
-      {registrando && (
-        <FormularioVisita
-          local={
-            {
-              id_local: registrando.id_local || '',
-              comercio: registrando.comercio,
-              mall_puerta: registrando.mall_puerta,
-              direccion: registrando.direccion,
-              distrito: registrando.distrito,
-              kam: registrando.kam || '',
-            } as Local
-          }
-          motivo={(registrando.motivo || 'Visita') as Motivo}
-          idAsignacion={registrando.id_asignacion}
-          onClose={() => setRegistrando(null)}
-          onGuardado={() => {
-            setRegistrando(null);
-            setToast('¡Visita registrada!');
-            setTimeout(() => setToast(''), 3000);
-            recargar();
-          }}
-        />
-      )}
-
-      {toast && <Toast mensaje={toast} />}
     </main>
   );
 }

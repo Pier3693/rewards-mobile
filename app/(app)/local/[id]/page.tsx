@@ -13,6 +13,7 @@ import {
   type LocalCompleto,
 } from '@/lib/locales';
 import { tituloBonito, telefonoWhatsApp, telefonoLegible } from '@/lib/texto';
+import { separarObservacion } from '@/lib/visita';
 import {
   estadoTemporal,
   textoEstado,
@@ -23,14 +24,7 @@ import {
   indicacionesLimpias,
   type Parada,
 } from '@/lib/ruta';
-import BottomSheet from '@/components/BottomSheet';
 import Toast from '@/components/Toast';
-import {
-  FormularioVisita,
-  MOTIVOS,
-  type Local,
-  type Motivo,
-} from '@/components/FormularioVisita';
 import {
   IconStore,
   IconPhone,
@@ -68,8 +62,6 @@ export default function LocalPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
-  const [eligiendoMotivo, setEligiendoMotivo] = useState(false);
-  const [motivoElegido, setMotivoElegido] = useState<Motivo | null>(null);
   const [ahora, setAhora] = useState(() => new Date());
 
   const cargar = useCallback(async () => {
@@ -103,12 +95,16 @@ export default function LocalPage() {
   /** La parada de hoy de este local, si la hay. */
   const asignacion = useMemo(() => asignacionDeLocal(dia, id), [dia, id]);
 
-  const motivoParaRegistrar: Motivo | null =
-    (asignacion?.motivo as Motivo) || motivoElegido;
-
+  /**
+   * El motivo ya no se pregunta aquí: lo elige el paso 1 del registro.
+   * Si el local está en la ruta, se manda la asignación para que quede
+   * completada con su resultado.
+   */
   function iniciarRegistro() {
-    if (asignacion?.motivo) return; // ya hay motivo: el form se abre solo
-    setEligiendoMotivo(true);
+    const asg = asignacion?.id_asignacion
+      ? `?asg=${encodeURIComponent(asignacion.id_asignacion)}`
+      : '';
+    router.push(`/visita/${encodeURIComponent(id)}${asg}`);
   }
 
   async function copiar(texto: string) {
@@ -267,9 +263,7 @@ export default function LocalPage() {
               .join(' · ')}
           </p>
           {local.ultima_observacion && (
-            <p className="mt-2 rounded-xl bg-gris-light px-3 py-2 text-[12.5px] text-ink">
-              {local.ultima_observacion}
-            </p>
+            <ObservacionAnterior texto={local.ultima_observacion} />
           )}
           {aviso.tipo === 'hace-mucho' && (
             <p className="mt-2 text-[12px] font-semibold text-ink-2">
@@ -312,54 +306,6 @@ export default function LocalPage() {
         </button>
       </div>
 
-      {/* Sin asignación no hay motivo: hay que preguntarlo antes.
-          La Fase 4 lo absorbe en el paso 1 del formulario. */}
-      {eligiendoMotivo && (
-        <BottomSheet
-          titulo="¿Qué vas a hacer?"
-          subtitulo={local.comercio}
-          onClose={() => setEligiendoMotivo(false)}
-        >
-          <div className="grid grid-cols-2 gap-2.5">
-            {MOTIVOS.map((m) => (
-              <button
-                key={m.valor}
-                onClick={() => {
-                  setMotivoElegido(m.valor);
-                  setEligiendoMotivo(false);
-                }}
-                className="card flex flex-col items-center gap-2 border border-line p-4 !shadow-none transition active:scale-[0.98]"
-              >
-                <span className="text-ink-2">{m.icon}</span>
-                <span className="text-[13px] font-semibold">{m.label}</span>
-              </button>
-            ))}
-          </div>
-        </BottomSheet>
-      )}
-
-      {motivoParaRegistrar && (
-        <FormularioVisita
-          local={
-            {
-              id_local: local.id_local,
-              comercio: local.comercio,
-              mall_puerta: local.mall_puerta,
-              direccion: local.direccion,
-              distrito: local.distrito,
-              kam: local.kam,
-            } as Local
-          }
-          motivo={motivoParaRegistrar}
-          idAsignacion={asignacion?.id_asignacion}
-          onClose={() => setMotivoElegido(null)}
-          onGuardado={() => {
-            setMotivoElegido(null);
-            router.push('/hoy');
-          }}
-        />
-      )}
-
       {toast && <Toast mensaje={toast} />}
     </main>
   );
@@ -378,6 +324,25 @@ function Cabecera({ onVolver }: { onVolver: () => void }) {
       </button>
       <p className="text-[15px] font-semibold">Detalle del local</p>
     </header>
+  );
+}
+
+/**
+ * La observación puede traer el tipo de incidencia como prefijo
+ * ("[Local cerrado] texto"), porque la hoja no tiene columna para él.
+ * Se muestra como etiqueta en vez de dejar los corchetes crudos.
+ */
+function ObservacionAnterior({ texto }: { texto: string }) {
+  const { tipo, texto: limpio } = separarObservacion(texto);
+  return (
+    <div className="mt-2 rounded-xl bg-gris-light px-3 py-2">
+      {tipo && (
+        <span className="mb-1 inline-block rounded-full bg-err-light px-2 py-0.5 text-[11px] font-semibold text-err">
+          {tipo}
+        </span>
+      )}
+      {limpio && <p className="text-[12.5px] text-ink">{limpio}</p>}
+    </div>
   );
 }
 
