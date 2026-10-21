@@ -116,8 +116,16 @@ describe('envío correcto', () => {
   });
 
   test('se envían en el orden en que se hicieron', async () => {
-    const vieja = visita({ idVisita: 'v-vieja', creadoEn: AHORA - 10_000 });
-    const nueva = visita({ idVisita: 'v-nueva', creadoEn: AHORA });
+    const vieja = visita({
+      idVisita: 'v-vieja',
+      creadoEn: AHORA - 10_000,
+      payload: { marca: 'vieja' },
+    });
+    const nueva = visita({
+      idVisita: 'v-nueva',
+      creadoEn: AHORA,
+      payload: { marca: 'nueva' },
+    });
     const almacen = almacenFalso([nueva, vieja]);
 
     const orden: string[] = [];
@@ -131,7 +139,8 @@ describe('envío correcto', () => {
     });
 
     assert.equal(almacen.contenido.size, 0);
-    assert.equal(orden.length, 2);
+    // Se metieron al revés a propósito: tiene que salir la vieja primero.
+    assert.deepEqual(orden, ['vieja', 'nueva']);
   });
 });
 
