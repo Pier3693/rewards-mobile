@@ -134,6 +134,14 @@ html {
 :root[data-theme='dark'] .text-err { color: var(--color-err-texto); }
 :root[data-theme='dark'] .text-gris { color: var(--color-gris-texto); }
 
+/* Filas que se deslizan con el dedo, sin la barra de scroll debajo. */
+.sin-barra-scroll {
+  scrollbar-width: none;
+}
+.sin-barra-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* Barras fijas como las de iOS: translúcidas, con desenfoque y una
    línea fina arriba. */
 .barra-ios {

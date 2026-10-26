@@ -115,7 +115,7 @@ export default function HistorialPage() {
 
       {/* ── Filtro ── */}
       {datos && !sinNada && (
-        <div className="-mx-5 mb-4 flex gap-2 overflow-x-auto px-5 pb-1">
+        <div className="sin-barra-scroll -mx-5 mb-4 flex gap-2 overflow-x-auto px-5">
           {FILTROS.map((f) => {
             const activo = filtro === f.valor;
             return (
@@ -127,7 +127,7 @@ export default function HistorialPage() {
                 }`}
               >
                 {f.label}
-                <span className={activo ? 'text-white/80' : 'text-ink-2/70'}>{conteos[f.valor]}</span>
+                <span className={activo ? 'text-white/80' : 'text-ink-3'}>{conteos[f.valor]}</span>
               </button>
             );
           })}
