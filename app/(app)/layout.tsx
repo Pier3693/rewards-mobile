@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
-import TabBar from '@/components/TabBar';
+import TabBar, { hayBarraInferior } from '@/components/TabBar';
+import Sincronizador from '@/components/Sincronizador';
 
 export default function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
+  const pathname = usePathname();
   const [listo, setListo] = useState(false);
 
   useEffect(() => {
@@ -28,9 +30,11 @@ export default function AppLayout({
   }
 
   return (
-    <div className="min-h-dvh pb-24">
+    <div className={`min-h-dvh ${hayBarraInferior(pathname) ? 'pb-pantalla' : ''}`}>
       {children}
       <TabBar />
+      {/* Envía las visitas que quedaron en el celular. */}
+      <Sincronizador />
     </div>
   );
 }

@@ -3,25 +3,169 @@
 /* ══ Tokens de marca — según mockup mobile ══ */
 @theme {
   --color-primary: #3d35c8;
-  --color-primary-deep: #2e27a0;
   --color-primary-light: #eeedfe;
-  --color-teal: #6c63e8;
+  --color-primary-mid: #6c63e8;
+  /* Motivo de la visita — paleta unica, nunca comparte color con un status */
+  --color-motivo-visita: #3d35c8;
+  --color-motivo-visita-light: #eeedfe;
+  --color-motivo-branding: #ea580c;
+  --color-motivo-branding-light: #ffedd5;
+  --color-motivo-presencial: #9333ea;
+  --color-motivo-presencial-light: #f5e8ff;
+  --color-motivo-virtual: #0284c7;
+  --color-motivo-virtual-light: #e0f2fe;
+
+  /* Resultado de la visita — verde, rojo, ambar y gris quedan reservados */
   --color-ok: #16a34a;
   --color-ok-light: #dcfce7;
   --color-warn: #d97706;
   --color-warn-light: #fef3c7;
+  /* Botones ámbar con texto encima ("Reintentar ahora" de Hoy). No es
+     --color-warn: ese es el status Reprogramar y sus chips. Blanco sobre
+     #d97706 da 3.19:1; sobre #b45309, 5.02:1 (AA). */
+  --color-warn-boton: #b45309;
   --color-err: #dc2626;
   --color-err-light: #fee2e2;
+  /* "No existe": gris, distinto de cualquier motivo. */
+  --color-gris: #64748b;
+  --color-gris-suave: #f1f5f9;
+
   --color-ink: #0f172a;
   --color-ink-2: #64748b;
+  /* Terciario: solo para lo que no hay que leer sí o sí (contadores,
+     ayudas). Como en iOS, no llega a AA a propósito. */
+  --color-ink-3: #94a3b8;
+  --color-gris-light: #f1f5f9;
   --color-line: #e2e8f0;
   --color-bg: #f4f6fb;
+  /* Fondo de tarjetas y hojas. */
+  --color-surface: #ffffff;
+  /* Inputs y elementos dentro de una tarjeta. */
+  --color-campo: #ffffff;
+  /* Barras fijas translúcidas (ver .barra-ios). */
+  --color-barra: rgba(255, 255, 255, 0.85);
+  /* Texto o ícono sobre un relleno de status (verde, rojo, ámbar, gris). */
+  --color-sobre-estado: #ffffff;
+  /* Franja detrás de la hora del iPhone (ver .franja-estado): la hora va
+     siempre en blanco, así que en claro es el morado de marca. */
+  --color-franja: #3d35c8;
+
+  /* Los mismos colores cuando son TEXTO sobre un fondo. En claro son
+     iguales al color fuerte; en oscuro se aclaran para leerse, sin tocar
+     los rellenos (botones con texto blanco, puntos, bordes). */
+  --color-primary-texto: #3d35c8;
+  --color-motivo-visita-texto: #3d35c8;
+  --color-motivo-branding-texto: #ea580c;
+  --color-motivo-presencial-texto: #9333ea;
+  --color-motivo-virtual-texto: #0284c7;
+  --color-ok-texto: #16a34a;
+  --color-warn-texto: #d97706;
+  --color-err-texto: #dc2626;
+  --color-gris-texto: #64748b;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', sans-serif;
 }
 
 html {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ══ Modo oscuro, como el de iPhone ══
+   data-theme lo pone el script del <head> (lib/tema.ts) antes de pintar.
+
+   Fondos neutros sin tinte azul, y los colores del sistema de iOS. Los
+   chips son el color al 20 % sobre la tarjeta, con el texto en el color
+   fuerte. Tres colores de iOS no llegan a AA como texto sobre su chip
+   (rojo, morado y gris): para el TEXTO se usan sus variantes de
+   "Aumentar contraste" del propio iOS; puntos, rellenos y bordes llevan
+   el color normal.
+
+   El morado de marca #3d35c8 no cambia como relleno: botones, gradiente
+   y botón central, con texto blanco. lib/tema.test.ts comprueba el
+   contraste de todo esto. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #000000;
+  --color-surface: #1c1c1e;
+  --color-campo: #2c2c2e;
+  --color-gris-light: #2c2c2e;
+  --color-line: #38383a;
+  --color-ink: #ffffff;
+  --color-ink-2: rgba(235, 235, 245, 0.6);
+  --color-ink-3: rgba(235, 235, 245, 0.3);
+  --color-barra: rgba(28, 28, 30, 0.78);
+  --color-sobre-estado: #000000;
+  --color-franja: rgba(0, 0, 0, 0.8);
+
+  /* Status */
+  --color-ok: #30d158;
+  --color-err: #ff453a;
+  --color-warn: #ffd60a;
+  --color-warn-boton: #ffd60a;
+  --color-gris: #8e8e93;
+  --color-ok-light: rgba(48, 209, 88, 0.2);
+  --color-err-light: rgba(255, 69, 58, 0.2);
+  --color-warn-light: rgba(255, 214, 10, 0.2);
+  --color-gris-suave: rgba(142, 142, 147, 0.2);
+  --color-ok-texto: #30d158;
+  --color-err-texto: #ff6961;
+  --color-warn-texto: #ffd60a;
+  --color-gris-texto: #aeaeb2;
+
+  /* Motivos */
+  --color-motivo-visita: #a8a3ff;
+  --color-motivo-branding: #ff9f0a;
+  --color-motivo-presencial: #bf5af2;
+  --color-motivo-virtual: #64d2ff;
+  --color-motivo-visita-light: rgba(168, 163, 255, 0.2);
+  --color-motivo-branding-light: rgba(255, 159, 10, 0.2);
+  --color-motivo-presencial-light: rgba(191, 90, 242, 0.2);
+  --color-motivo-virtual-light: rgba(100, 210, 255, 0.2);
+  --color-motivo-visita-texto: #a8a3ff;
+  --color-motivo-branding-texto: #ff9f0a;
+  --color-motivo-presencial-texto: #da8fff;
+  --color-motivo-virtual-texto: #64d2ff;
+
+  /* Marca: el relleno sigue en #3d35c8; como texto, aclarado. */
+  --color-primary-light: rgba(168, 163, 255, 0.2);
+  --color-primary-texto: #a8a3ff;
+}
+
+/* Fuera de capa a propósito: así ganan a las utilidades de Tailwind sin
+   tener que tocar cada componente. Solo cambia el color del TEXTO. */
+:root[data-theme='dark'] .text-primary { color: var(--color-primary-texto); }
+:root[data-theme='dark'] .text-motivo-visita { color: var(--color-motivo-visita-texto); }
+:root[data-theme='dark'] .text-motivo-branding { color: var(--color-motivo-branding-texto); }
+:root[data-theme='dark'] .text-motivo-presencial { color: var(--color-motivo-presencial-texto); }
+:root[data-theme='dark'] .text-motivo-virtual { color: var(--color-motivo-virtual-texto); }
+:root[data-theme='dark'] .text-ok { color: var(--color-ok-texto); }
+:root[data-theme='dark'] .text-warn { color: var(--color-warn-texto); }
+:root[data-theme='dark'] .text-err { color: var(--color-err-texto); }
+:root[data-theme='dark'] .text-gris { color: var(--color-gris-texto); }
+
+/* Filas que se deslizan con el dedo, sin la barra de scroll debajo. */
+.sin-barra-scroll {
+  scrollbar-width: none;
+}
+.sin-barra-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Barras fijas como las de iOS: translúcidas, con desenfoque y una
+   línea fina arriba. */
+.barra-ios {
+  background: var(--color-barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid var(--color-line);
+}
+
+/* El logo es morado sobre transparente: en oscuro, sobre un círculo
+   blanco, para que se siga viendo la marca tal cual. */
+:root[data-theme='dark'] .logo-marca {
+  background: #fff;
+  border-radius: 9999px;
+  padding: 0.5rem;
 }
 
 body {
@@ -31,21 +175,99 @@ body {
   overscroll-behavior-y: none;
 }
 
-.safe-b {
-  padding-bottom: env(safe-area-inset-bottom);
+/* ══ Zonas seguras ══
+   La notch, la Dynamic Island, la hora y el indicador de inicio.
+
+   Estas clases van fuera de capa, así que SUSTITUYEN cualquier padding
+   de Tailwind del mismo lado. Por eso cada una lleva su propio relleno
+   base y le SUMA env(): nunca env() a secas, o en el navegador (donde
+   vale 0) el contenido queda pegado al borde. lib/tema.test.ts lo vigila. */
+
+/* Pantallas con barra de abajo: el contenido empieza bajo la hora. */
+.pt-pantalla {
+  padding-top: calc(1.25rem + env(safe-area-inset-top));
 }
-.safe-t {
-  padding-top: env(safe-area-inset-top);
+/* Pantallas con encabezado fijo: el encabezado pone su propio aire. */
+.pt-seguro {
+  padding-top: calc(0px + env(safe-area-inset-top));
+}
+/* Pantallas centradas (entrada, sin conexión, error, confirmación). */
+.py-seguro {
+  padding-top: calc(1.5rem + env(safe-area-inset-top));
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+/* Hueco para que la barra de abajo no tape lo último de la pantalla. */
+.pb-pantalla {
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+}
+/* La barra de abajo: sus etiquetas por encima del indicador de inicio. */
+.pb-tabbar {
+  padding-bottom: calc(0.25rem + env(safe-area-inset-bottom));
+}
+/* Barras de acción fijas (Detalle, Registro). */
+.pb-barra-fija {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+/* Hueco para la barra de acción fija: el botón y su relleno. */
+.pb-barra {
+  padding-bottom: calc(7.5rem + env(safe-area-inset-bottom));
+}
+/* Avisos flotantes. */
+.arriba-seguro {
+  top: calc(1rem + env(safe-area-inset-top));
+}
+.abajo-seguro {
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+/* Franja detrás de la hora del iPhone. Con la barra de estado
+   'black-translucent' la app ocupa toda la pantalla y la hora va en
+   blanco: la franja le da fondo, y el contenido pasa por debajo al hacer
+   scroll, nunca detrás de la hora. En Android y en el navegador mide 0. */
+.franja-estado {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: calc(0px + env(safe-area-inset-top));
+  background: var(--color-franja);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* Encabezado que se queda arriba al hacer scroll, justo bajo la hora,
+   translúcido como los de iOS. */
+.encabezado-fijo {
+  position: sticky;
+  top: calc(0px + env(safe-area-inset-top));
+  z-index: 20;
+  background: var(--color-barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--color-line);
+}
+
+/* Zona tocable de 44×44 sin cambiar el dibujo, para botones chicos (la X
+   de una foto, la de una hoja). No toca `position`: el botón ya tiene que
+   estar posicionado (relative o absolute). */
+.toque-44::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
 }
 
 /* Botón principal con gradiente del mockup */
 .btn-grad {
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-teal) 100%);
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-mid) 100%);
 }
 
 /* Tarjeta base */
 .card {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 1rem;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
 }

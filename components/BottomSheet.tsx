@@ -24,7 +24,7 @@ export default function BottomSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40">
-      <div className="animate-sheet-up flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-white">
+      <div className="animate-sheet-up flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-surface">
         {/* Handle */}
         <div className="flex justify-center pt-2.5">
           <span className="h-1.5 w-10 rounded-full bg-line" />
@@ -40,7 +40,7 @@ export default function BottomSheet({
           </div>
           <button
             onClick={onClose}
-            className="ml-3 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg text-ink-2"
+            className="toque-44 relative ml-3 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gris-light text-ink-2"
             aria-label="Cerrar"
           >
             <IconX />

@@ -10,6 +10,9 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // Node ejecuta las pruebas con --experimental-strip-types y exige la
+    // extension .ts en el import. Solo afecta a como se escriben los imports.
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,

@@ -2,16 +2,25 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  IconCalendar,
-  IconPlus,
-  IconMegaphone,
-  IconUser,
-} from '@/components/icons';
+import { IconHome, IconSearch, IconPlus, IconUser, IconClock } from '@/components/icons';
+
+/**
+ * Pantallas secundarias: tienen su propia salida y no llevan barra.
+ * En el registro, además, saltar a otra pestaña a media captura sería
+ * escaparse sin pasar por la confirmación de salida.
+ */
+export const RUTAS_SIN_BARRA = ['/local/', '/visita/'];
+
+/** Lo usa también el layout, para no reservar el hueco de la barra. */
+export function hayBarraInferior(pathname: string): boolean {
+  return !RUTAS_SIN_BARRA.some((r) => pathname.startsWith(r));
+}
 
 export default function TabBar() {
   const pathname = usePathname();
   const is = (p: string) => pathname.startsWith(p);
+
+  if (!hayBarraInferior(pathname)) return null;
 
   const item = (activo: boolean) =>
     `flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-semibold transition ${
@@ -19,11 +28,16 @@ export default function TabBar() {
     }`;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 backdrop-blur safe-b">
+    <nav className="fixed inset-x-0 bottom-0 z-40 barra-ios pb-tabbar">
       <div className="mx-auto flex max-w-md items-end px-2">
         <Link href="/hoy" className={item(is('/hoy'))}>
-          <IconCalendar className="h-[22px] w-[22px]" />
-          Mis visitas
+          <IconHome className="h-[22px] w-[22px]" />
+          Hoy
+        </Link>
+
+        <Link href="/buscar" className={item(is('/buscar'))}>
+          <IconSearch className="h-[22px] w-[22px]" />
+          Buscar
         </Link>
 
         {/* Botón central elevado (mockup 3) */}
@@ -47,9 +61,9 @@ export default function TabBar() {
           </span>
         </Link>
 
-        <Link href="/campana" className={item(is('/campana'))}>
-          <IconMegaphone className="h-[22px] w-[22px]" />
-          Campaña
+        <Link href="/historial" className={item(is('/historial'))}>
+          <IconClock className="h-[22px] w-[22px]" />
+          Historial
         </Link>
 
         <Link href="/perfil" className={item(is('/perfil'))}>

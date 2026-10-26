@@ -1,11 +1,16 @@
 {
+  "id": "/hoy",
   "name": "Rewards · Trade Marketing",
   "short_name": "Rewards",
   "description": "Registro de visitas y campañas en campo",
+  "lang": "es-PE",
+  "dir": "ltr",
   "start_url": "/hoy",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#3d35c8",
+  "theme_color": "#3D35C8",
   "icons": [
     {
       "src": "/icon-192.png",
