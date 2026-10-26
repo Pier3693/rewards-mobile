@@ -388,6 +388,9 @@ function Miniatura({ url, miniatura, n }: { url: string; miniatura: string; n: n
           onError={() => setFallo(true)}
           className="h-full w-full object-cover"
           referrerPolicy="no-referrer"
+          // Solo se piden las que se ven, y sin bloquear el pintado.
+          loading="lazy"
+          decoding="async"
         />
       )}
     </a>
