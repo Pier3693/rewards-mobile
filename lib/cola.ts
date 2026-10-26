@@ -42,6 +42,11 @@ export interface VisitaEncolada {
   creadoEn: number;
   /** Último error, para poder explicarle al CAP qué pasa. */
   ultimoError?: string;
+  /**
+   * El backend la rechazó (no fue un corte de red). No se reintenta sola:
+   * espera a que el CAP la mire y toque Reintentar. Nunca se borra.
+   */
+  revisar?: boolean;
 }
 
 /** Contrato que usa la sincronización. Permite probarla sin IndexedDB. */

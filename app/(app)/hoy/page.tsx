@@ -253,6 +253,7 @@ export default function HoyPage() {
       {cola.leida && (
         <EstadoEnvio
           pendientes={cola.visitas.length}
+          enVuelo={cola.enVuelo.length}
           enviando={cola.enCurso}
           sesionVencida={cola.sesionVencida}
           onReintentar={cola.reintentar}
@@ -358,12 +359,15 @@ function iphoneSinInstalar(): boolean {
 
 function EstadoEnvio({
   pendientes,
+  enVuelo,
   enviando,
   sesionVencida,
   onReintentar,
   onIniciarSesion,
 }: {
   pendientes: number;
+  /** Las que se están mandando ahora mismo (un Guardar reciente). */
+  enVuelo: number;
   enviando: boolean;
   sesionVencida: boolean;
   onReintentar: () => void;
@@ -378,6 +382,15 @@ function EstadoEnvio({
   }
 
   const cuantas = `${pendientes} ${pendientes === 1 ? 'visita' : 'visitas'}`;
+
+  // Recién guardadas y saliendo: no es que estén "pendientes".
+  if (enVuelo >= pendientes && !sesionVencida) {
+    return (
+      <p className="-mt-2 mb-4 flex items-center gap-2 text-[12.5px] font-medium text-primary">
+        <span className="spinner !h-3.5 !w-3.5 !border-2" /> Enviando {cuantas}…
+      </p>
+    );
+  }
 
   return (
     <div className="mb-4 rounded-2xl bg-warn-light px-4 py-3 text-warn">

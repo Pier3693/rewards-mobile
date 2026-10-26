@@ -35,9 +35,9 @@ import {
 } from '@/lib/ruta';
 import { tituloBonito, horaDe } from '@/lib/texto';
 import { clearSession, marcarSesionExpirada, getUsuario } from '@/lib/auth';
-import { colaIndexedDB, nuevaEntrada } from '@/lib/cola';
-import { registrarResultado } from '@/lib/sincronizacion';
-import { pedirAlmacenamientoPersistente } from '@/lib/sincronizador';
+import { nuevaEntrada } from '@/lib/cola';
+import { guardarYEnviar } from '@/lib/sincronizador';
+import { estadoDeVisita, TEXTO_ESTADO } from '@/lib/estadoEnvio';
 import { useConexion } from '@/lib/useConexion';
 import {
   MOTIVOS,
@@ -54,7 +54,6 @@ import {
   fijarCreadoEn,
   type MomentoGuardado,
   queHacerTrasEnvio,
-  type TrasEnvio,
   borradorTieneAlgo,
   guardarBorrador,
   leerBorrador,
@@ -150,11 +149,6 @@ export default function VisitaPage() {
   const [puedeReintentar, setPuedeReintentar] = useState(false);
   /** La sesión venció al guardar: el botón pasa a llevar al login. */
   const [sesionVencida, setSesionVencida] = useState(false);
-  /**
-   * La visita quedó a salvo en el celular sin llegar al backend: por
-   * falta de señal o porque la sesión venció.
-   */
-  const [quedoEnCola, setQuedoEnCola] = useState<'senal' | 'sesion' | null>(null);
   const enLinea = useConexion();
   const [tocado, setTocado] = useState(false);
   const [ofreceBorrador, setOfreceBorrador] = useState(false);
@@ -504,10 +498,9 @@ export default function VisitaPage() {
       return;
     }
 
-    // Primero se guarda en el celular y después se envía: si el CAP cierra
-    // la app a mitad del envío, o se va la señal, la visita y sus fotos
-    // siguen ahí. El próximo intento de la cola se deja para después del
-    // límite de este envío, para que no salgan dos a la vez.
+    // Primero se guarda en el celular: si el CAP cierra la app, o se va
+    // la señal, la visita y sus fotos siguen ahí. El próximo intento de la
+    // cola se deja para después del límite del envío inmediato.
     const entrada = {
       ...nuevaEntrada(
         idVisita,
@@ -523,44 +516,30 @@ export default function VisitaPage() {
       ),
       proximoIntento: Date.now() + MS_LIMITE_GUARDADO + 30_000,
     };
-    let enCola = false;
-    try {
-      await colaIndexedDB.guardar(entrada);
-      enCola = true;
-      pedirAlmacenamientoPersistente();
-    } catch {
-      // Sin IndexedDB (modo privado): se envía directo, como antes.
-    }
 
-    let resultado: TrasEnvio;
-    let mensajeError = '';
-    if (enCola && navigator.onLine === false) {
-      // Sin red no vale la pena esperar al fallo: queda en la cola.
-      resultado = 'reintentar';
-    } else {
-      const r = await api('registrarVisita', peticion, {
-        msLimite: MS_LIMITE_GUARDADO,
-        redirigirSiVence: false,
-      });
-      // `repetida` es un éxito: el backend reconoció el id porque un
-      // envío anterior sí llegó, aunque el CAP no viera la confirmación.
-      resultado = queHacerTrasEnvio(r);
-      mensajeError = r.error || '';
-    }
-
-    if (enCola) {
-      await registrarResultado(colaIndexedDB, entrada, resultado, Date.now(), mensajeError);
-    }
-
-    if (enCola && (resultado === 'reintentar' || resultado === 'sesion')) {
-      // La cola ya tiene todo, fotos incluidas: el borrador sobra.
+    // En cuanto está en el celular se enseña la confirmación, y el envío
+    // sigue por detrás: antes el CAP esperaba la subida de las fotos a
+    // Drive y otra llamada a Apps Script para el avance. Hoy marca la
+    // parada como hecha al instante (la cola cuenta) y la confirmación va
+    // diciendo "Enviando… / Enviada ✓ / Pendiente de envío".
+    if (await guardarYEnviar(entrada)) {
       borrarBorrador(clave);
-      setQuedoEnCola(resultado === 'sesion' ? 'sesion' : 'senal');
       setGuardando(false);
       setGuardada(true);
       window.scrollTo({ top: 0 });
       return;
     }
+
+    // Sin IndexedDB (modo privado) no hay dónde dejarla: se envía
+    // esperando la respuesta, como antes.
+    const r = await api('registrarVisita', peticion, {
+      msLimite: MS_LIMITE_GUARDADO,
+      redirigirSiVence: false,
+    });
+    // `repetida` es un éxito: el backend reconoció el id porque un envío
+    // anterior sí llegó, aunque el CAP no viera la confirmación.
+    const resultado = queHacerTrasEnvio(r);
+    const mensajeError = r.error || '';
 
     if (resultado === 'reintentar') {
       setGuardando(false);
@@ -587,11 +566,11 @@ export default function VisitaPage() {
     }
 
     borrarBorrador(clave);
-    // La ruta del día cambió: que Hoy y el avance se vean al instante.
+    // La ruta del día cambió. Se pide por detrás: la confirmación no espera.
     invalidarRutaDeHoy();
-    const rDia = await getRutaDeHoy(true);
-    if (rDia.ok && rDia.data) setDia(rDia.data);
-
+    getRutaDeHoy(true).then((rDia) => {
+      if (rDia.ok && rDia.data) setDia(rDia.data);
+    });
     setGuardando(false);
     setGuardada(true);
     window.scrollTo({ top: 0 });
@@ -617,8 +596,9 @@ export default function VisitaPage() {
       <Confirmacion
         local={local}
         dia={diaConTodaLaCola}
-        enCola={quedoEnCola}
+        idVisita={idVisita}
         onIniciarSesion={irAlLogin}
+        onVerHistorial={() => router.replace('/historial')}
       />
     );
   }
@@ -1331,16 +1311,27 @@ function Paso3({
 function Confirmacion({
   local,
   dia,
-  enCola,
+  idVisita,
   onIniciarSesion,
+  onVerHistorial,
 }: {
   local: Autocompletado;
   dia: DiaData | null;
-  /** La visita quedó en el celular sin llegar al backend, y por qué. */
-  enCola: 'senal' | 'sesion' | null;
+  idVisita: string;
   onIniciarSesion: () => void;
+  onVerHistorial: () => void;
 }) {
   const router = useRouter();
+  // El envío sigue por detrás: esto se actualiza solo cuando avanza.
+  const cola = useCola();
+  const entrada = cola.visitas.find((v) => v.idVisita === idVisita);
+  const estado = estadoDeVisita({
+    enCola: entrada,
+    // Hasta leer la cola no se sabe: mejor "enviando" que un "enviada" falso.
+    enVuelo: cola.enVuelo.includes(idVisita) || !cola.leida,
+    sesionVencida: cola.sesionVencida,
+  });
+  const enCola = estado === 'pendiente' || estado === 'sesion' || estado === 'revisar';
   const ruta = useMemo(() => ordenarRuta(paradasDelDia(dia)), [dia]);
   const hechas = ruta.filter(estaCompletada).length;
   const total = ruta.length;
@@ -1363,9 +1354,11 @@ function Confirmacion({
         <>
           <h1 className="mt-5 text-[24px] font-bold">Visita guardada en el celular</h1>
           <p className="mt-2 text-[14px] text-ink-2">
-            {enCola === 'sesion'
+            {estado === 'sesion'
               ? 'Tu sesión venció. Inicia sesión y se enviará sola.'
-              : 'Se enviará al recuperar señal.'}
+              : estado === 'revisar'
+                ? `No se pudo registrar: ${entrada?.ultimoError || 'el servidor no la aceptó'}. Sigue guardada; revísala en Historial.`
+                : 'Se enviará sola al recuperar señal.'}
           </p>
         </>
       ) : (
@@ -1378,6 +1371,22 @@ function Confirmacion({
           </p>
         </>
       )}
+
+      {/* El envío en vivo: Enviando… → Enviada ✓, o Pendiente de envío. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={`mx-auto mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-[13px] font-semibold ${
+          estado === 'enviada'
+            ? 'bg-ok-light text-ok'
+            : estado === 'enviando'
+              ? 'bg-primary-light text-primary'
+              : 'bg-warn-light text-warn'
+        }`}
+      >
+        {estado === 'enviando' && <span className="spinner !h-3.5 !w-3.5 !border-2" />}
+        {TEXTO_ESTADO[estado]}
+      </p>
 
       {total > 0 && (
         <div className="card mt-6 p-4 text-left">
@@ -1409,7 +1418,15 @@ function Confirmacion({
       )}
 
       <div className="mt-auto space-y-2 pt-8">
-        {enCola === 'sesion' && (
+        {estado === 'revisar' && (
+          <button
+            onClick={onVerHistorial}
+            className="btn-grad flex min-h-[52px] w-full items-center justify-center rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 active:scale-[0.98]"
+          >
+            Ver en Historial
+          </button>
+        )}
+        {estado === 'sesion' && (
           <button
             onClick={onIniciarSesion}
             className="btn-grad flex min-h-[52px] w-full items-center justify-center rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 active:scale-[0.98]"
@@ -1417,7 +1434,7 @@ function Confirmacion({
             Iniciar sesión
           </button>
         )}
-        {enCola !== 'sesion' && siguiente?.id_local && (
+        {estado !== 'sesion' && estado !== 'revisar' && siguiente?.id_local && (
           <button
             onClick={() =>
               router.replace(

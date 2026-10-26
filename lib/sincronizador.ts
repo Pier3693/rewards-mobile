@@ -14,14 +14,21 @@
 import { api, MS_LIMITE_GUARDADO } from './api.ts';
 import { getUsuario } from './auth.ts';
 import { invalidarRutaDeHoy } from './cacheDia.ts';
-import { colaIndexedDB, delUsuario, EVENTO_COLA } from './cola.ts';
+import { colaIndexedDB, delUsuario, EVENTO_COLA, type VisitaEncolada } from './cola.ts';
 import {
   procesarCola,
+  guardarPrimeroLocal,
   esperaEnvioManual,
   type ResultadoSincronizacion,
 } from './sincronizacion.ts';
+import type { ApiResponse } from './api.ts';
 
 let enCurso: Promise<ResultadoSincronizacion | null> | null = null;
+/**
+ * Visitas que se están mandando ahora mismo por el envío inmediato de
+ * Guardar. La cola no las toca mientras tanto: saldrían dos veces.
+ */
+const enVuelo = new Set<string>();
 let sesionVencida = false;
 let temporizador: ReturnType<typeof setTimeout> | null = null;
 
@@ -41,14 +48,55 @@ function avisar() {
   window.dispatchEvent(new Event(EVENTO_COLA));
 }
 
+/** Manda una visita, sin redirigir al login a media pantalla. */
+function enviarVisita(payload: Record<string, unknown>): Promise<ApiResponse<unknown>> {
+  // Sin red no vale la pena esperar al fallo.
+  if (sinSenal()) {
+    return Promise.resolve({ ok: false, reintentable: true, error: 'Sin conexión a internet.' });
+  }
+  return api('registrarVisita', payload, { msLimite: MS_LIMITE_GUARDADO, redirigirSiVence: false });
+}
+
 export interface EstadoSincronizacion {
+  /** Se está enviando algo: una pasada de la cola o un Guardar reciente. */
   enCurso: boolean;
   /** La última pasada se detuvo porque la sesión venció. */
   sesionVencida: boolean;
+  /** Las visitas que se están mandando ahora mismo. */
+  enVuelo: string[];
 }
 
 export function estadoSincronizacion(): EstadoSincronizacion {
-  return { enCurso: !!enCurso, sesionVencida };
+  return { enCurso: !!enCurso || enVuelo.size > 0, sesionVencida, enVuelo: [...enVuelo] };
+}
+
+/**
+ * Guardar "primero en el celular": vuelve en cuanto la visita está en la
+ * cola, y el envío sigue por detrás. La pantalla enseña la confirmación
+ * sin esperar a Apps Script ni a la subida de las fotos.
+ *
+ * @return false si no hay IndexedDB (modo privado): toca enviar
+ *   esperando la respuesta, como antes.
+ */
+export async function guardarYEnviar(entrada: VisitaEncolada): Promise<boolean> {
+  const r = await guardarPrimeroLocal({
+    almacen: colaIndexedDB,
+    entrada,
+    enviar: enviarVisita,
+    enVuelo,
+  });
+  if (!r.enCola) return false;
+
+  pedirAlmacenamientoPersistente();
+  avisar();
+  r.envio.then(({ resultado }) => {
+    if (resultado === 'sesion') sesionVencida = true;
+    // Hoy tiene que enseñar lo que ya llegó al backend.
+    if (resultado === 'guardada' || resultado === 'repetida') invalidarRutaDeHoy();
+    avisar();
+    programarSiguiente();
+  });
+  return true;
 }
 
 /**
@@ -78,13 +126,11 @@ async function ejecutar(forzar: boolean): Promise<ResultadoSincronizacion | null
       almacen: colaIndexedDB,
       correo,
       forzar,
+      // Las que manda ahora mismo un Guardar no se tocan.
+      excluir: enVuelo,
       // Sin redirigir: esto corre detrás de cualquier pantalla y un salto
       // al login a media visita haría perder las fotos del formulario.
-      enviar: (payload) =>
-        api('registrarVisita', payload, {
-          msLimite: MS_LIMITE_GUARDADO,
-          redirigirSiVence: false,
-        }),
+      enviar: enviarVisita,
     });
 
   // Con dos pestañas abiertas, el candado del navegador evita que las

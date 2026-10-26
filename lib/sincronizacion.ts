@@ -11,7 +11,7 @@
 
 import { delUsuario, type AlmacenCola, type VisitaEncolada } from './cola.ts';
 import type { ApiResponse } from './api.ts';
-import type { TrasEnvio } from './visita.ts';
+import { queHacerTrasEnvio, type TrasEnvio } from './visita.ts';
 
 /**
  * Espera entre intentos. Empieza corto, por si fue un bache de señal,
@@ -66,6 +66,11 @@ export interface OpcionesSincronizacion {
   ahora?: number;
   /** true para saltarse las esperas: lo usa el botón de reintentar. */
   forzar?: boolean;
+  /**
+   * Visitas que ya se están enviando por otro lado (el envío inmediato
+   * de Guardar). No se tocan: saldrían dos veces a la vez.
+   */
+  excluir?: ReadonlySet<string>;
 }
 
 /**
@@ -82,12 +87,14 @@ export async function procesarCola({
   enviar,
   ahora = Date.now(),
   forzar = false,
+  excluir,
 }: OpcionesSincronizacion): Promise<ResultadoSincronizacion> {
   const visitas = delUsuario(await almacen.listar(), correo);
   let enviadas = 0;
   const pendientes = async () => delUsuario(await almacen.listar(), correo).length;
 
   for (const v of visitas) {
+    if (excluir?.has(v.idVisita)) continue;
     if (!forzar && !tocaReintentar(v, ahora)) continue;
     if (!forzar && esperaEnvioManual(v)) continue;
 
@@ -119,12 +126,11 @@ export async function procesarCola({
 }
 
 /**
- * Lo que se hace con la entrada después del envío inmediato que hace el
- * formulario al pulsar Guardar.
+ * Lo que se hace con la entrada después del envío inmediato de Guardar.
  *
  * - Guardada o repetida → se borra: el trabajo está hecho.
- * - Error del backend → también se borra: el formulario sigue abierto con
- *   todo y el CAP lo corrige allí. Reenviarlo daría lo mismo.
+ * - Rechazo del backend → se queda, marcada para revisar. El CAP ya vio
+ *   la confirmación y salió del formulario: borrarla la perdería.
  * - Corte por el camino → se cuenta el intento y queda para la cola.
  * - Sesión vencida → no se toca: se envía al volver a entrar.
  */
@@ -135,13 +141,84 @@ export async function registrarResultado(
   ahora = Date.now(),
   error = '',
 ) {
-  if (resultado === 'guardada' || resultado === 'repetida' || resultado === 'error') {
+  if (resultado === 'guardada' || resultado === 'repetida') {
     await almacen.borrar(v.idVisita);
+    return;
+  }
+  if (resultado === 'error') {
+    // Sin reintentos solos (reenviar lo mismo daría lo mismo): espera al
+    // botón Reintentar, que pasa por encima con `forzar`.
+    await almacen.guardar({
+      ...v,
+      revisar: true,
+      intentos: Math.max(v.intentos, MAX_INTENTOS_AUTOMATICOS),
+      ultimoError: error || 'El servidor no aceptó la visita',
+    });
     return;
   }
   if (resultado === 'reintentar') {
     await aplazar(almacen, v, ahora, error || 'No se pudo enviar');
   }
+}
+
+/** Manda una entrada y deja la cola como corresponda. Nunca rechaza. */
+export async function enviarAhora({
+  almacen,
+  entrada,
+  enviar,
+  ahora = () => Date.now(),
+}: {
+  almacen: AlmacenCola;
+  entrada: VisitaEncolada;
+  enviar: (payload: Record<string, unknown>) => Promise<ApiResponse<unknown>>;
+  ahora?: () => number;
+}): Promise<{ resultado: TrasEnvio; error: string }> {
+  let r: ApiResponse<unknown>;
+  try {
+    r = await enviar(entrada.payload);
+  } catch (e) {
+    r = { ok: false, reintentable: true, error: String(e) };
+  }
+  const resultado = queHacerTrasEnvio(r);
+  const error = r.error || '';
+  await registrarResultado(almacen, entrada, resultado, ahora(), error);
+  return { resultado, error };
+}
+
+/**
+ * Guardar "primero en el celular": en cuanto la visita está en la cola,
+ * devuelve, y el envío sigue por detrás. La pantalla enseña la
+ * confirmación sin esperar a Apps Script ni a la subida de las fotos.
+ *
+ * Mientras se envía, la visita está en `enVuelo`: procesarCola no la toca
+ * (recibe ese mismo conjunto en `excluir`), así no sale dos veces.
+ *
+ * @return enCola false si no hay IndexedDB (modo privado): entonces toca
+ *   enviar a la antigua, esperando la respuesta.
+ */
+export async function guardarPrimeroLocal({
+  almacen,
+  entrada,
+  enviar,
+  enVuelo,
+  ahora,
+}: {
+  almacen: AlmacenCola;
+  entrada: VisitaEncolada;
+  enviar: (payload: Record<string, unknown>) => Promise<ApiResponse<unknown>>;
+  enVuelo: Set<string>;
+  ahora?: () => number;
+}): Promise<{ enCola: false } | { enCola: true; envio: Promise<{ resultado: TrasEnvio; error: string }> }> {
+  try {
+    await almacen.guardar(entrada);
+  } catch {
+    return { enCola: false };
+  }
+  enVuelo.add(entrada.idVisita);
+  const envio = enviarAhora({ almacen, entrada, enviar, ahora }).finally(() =>
+    enVuelo.delete(entrada.idVisita),
+  );
+  return { enCola: true, envio };
 }
 
 async function aplazar(

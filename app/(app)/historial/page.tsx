@@ -18,6 +18,7 @@ import {
   type FiltroStatus,
 } from '@/lib/historial';
 import { useCola } from '@/lib/useCola';
+import { estadoDeVisita, TEXTO_ESTADO, type EstadoEnvio } from '@/lib/estadoEnvio';
 import {
   STATUS_LISTA,
   STATUS_CLS,
@@ -79,6 +80,17 @@ export default function HistorialPage() {
   }, [cola.visitas.length, cargar]);
 
   const hoy = useMemo(() => diaDeHoy(), []);
+
+  /** En qué va el envío de una visita de la cola. */
+  const envioDe = useCallback(
+    (idVisita: string): EstadoEnvio =>
+      estadoDeVisita({
+        enCola: cola.visitas.find((v) => v.idVisita === idVisita),
+        enVuelo: cola.enVuelo.includes(idVisita),
+        sesionVencida: cola.sesionVencida,
+      }),
+    [cola.visitas, cola.enVuelo, cola.sesionVencida],
+  );
   const { pendientes, enviadas } = useMemo(
     () => unirConCola(datos || [], cola.visitas),
     [datos, cola.visitas],
@@ -168,7 +180,7 @@ export default function HistorialPage() {
               </h2>
               <div className="space-y-2.5">
                 {pendientesFiltradas.map((v) => (
-                  <Tarjeta key={v.id_visita} v={v} onTap={() => setAbierta(v)} />
+                  <Tarjeta key={v.id_visita} v={v} envio={envioDe(v.id_visita)} onTap={() => setAbierta(v)} />
                 ))}
               </div>
             </section>
@@ -195,6 +207,9 @@ export default function HistorialPage() {
         <Detalle
           v={abierta}
           titulo={tituloDetalle(abierta, hoy)}
+          envio={abierta.pendiente ? envioDe(abierta.id_visita) : undefined}
+          error={cola.visitas.find((e) => e.idVisita === abierta.id_visita)?.ultimoError || ''}
+          onReintentar={cola.reintentar}
           onClose={() => setAbierta(null)}
           onVerLocal={(id) => router.push(`/local/${encodeURIComponent(id)}`)}
         />
@@ -232,17 +247,22 @@ function ChipStatus({ status }: { status: string }) {
   );
 }
 
-function ChipPendiente() {
+/** "Enviando…", "Pendiente de envío", "Revisar"… de una visita de la cola. */
+function ChipEnvio({ estado }: { estado: EstadoEnvio }) {
   return (
-    <span className="rounded-full bg-warn-light px-2.5 py-0.5 text-[11px] font-semibold text-warn">
-      Pendiente de envío
+    <span
+      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+        estado === 'enviando' ? 'bg-primary-light text-primary' : 'bg-warn-light text-warn'
+      }`}
+    >
+      {TEXTO_ESTADO[estado]}
     </span>
   );
 }
 
 // ── Tarjeta ───────────────────────────────────────
 
-function Tarjeta({ v, onTap }: { v: VisitaHistorial; onTap: () => void }) {
+function Tarjeta({ v, envio, onTap }: { v: VisitaHistorial; envio?: EstadoEnvio; onTap: () => void }) {
   const hora = parsearFecha(v.fecha)?.hora || '';
   return (
     <button onClick={onTap} className="card block w-full p-3.5 text-left transition active:scale-[0.99]">
@@ -254,7 +274,7 @@ function Tarjeta({ v, onTap }: { v: VisitaHistorial; onTap: () => void }) {
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <ChipMotivo motivo={v.motivo} />
         <ChipStatus status={v.status} />
-        {v.pendiente && <ChipPendiente />}
+        {envio && <ChipEnvio estado={envio} />}
       </div>
     </button>
   );
@@ -265,11 +285,18 @@ function Tarjeta({ v, onTap }: { v: VisitaHistorial; onTap: () => void }) {
 function Detalle({
   v,
   titulo,
+  envio,
+  error,
+  onReintentar,
   onClose,
   onVerLocal,
 }: {
   v: VisitaHistorial;
   titulo: string;
+  /** Solo para las que siguen en la cola. */
+  envio?: EstadoEnvio;
+  error: string;
+  onReintentar: () => void;
   onClose: () => void;
   onVerLocal: (id: string) => void;
 }) {
@@ -283,12 +310,23 @@ function Detalle({
       <div className="mt-2 flex flex-wrap gap-1.5">
         <ChipMotivo motivo={v.motivo} />
         <ChipStatus status={v.status} />
-        {v.pendiente && <ChipPendiente />}
+        {envio && <ChipEnvio estado={envio} />}
       </div>
-      {v.pendiente && (
-        <p className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-[12.5px] text-warn">
-          Guardada en el celular. Se enviará sola al recuperar señal.
-        </p>
+      {envio && envio !== 'enviando' && (
+        <div className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-[12.5px] text-warn">
+          <p>
+            {envio === 'revisar'
+              ? `El servidor no la aceptó: ${error || 'sin detalle'}. Sigue guardada en el celular.`
+              : envio === 'sesion'
+                ? 'Guardada en el celular. Inicia sesión y se enviará sola.'
+                : 'Guardada en el celular. Se enviará sola al recuperar señal.'}
+          </p>
+          {envio !== 'sesion' && (
+            <button onClick={onReintentar} className="mt-1 min-h-11 font-semibold underline">
+              Reintentar ahora
+            </button>
+          )}
+        </div>
       )}
 
       <h3 className="mb-1.5 mt-5 text-[11px] font-bold uppercase tracking-wider text-ink-2">Observación</h3>

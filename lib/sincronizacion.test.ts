@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   procesarCola,
   registrarResultado,
+  guardarPrimeroLocal,
   esperaParaIntento,
   tocaReintentar,
   esperaEnvioManual,
@@ -20,6 +21,7 @@ import {
   type VisitaEncolada,
 } from './cola.ts';
 import type { ApiResponse } from './api.ts';
+import { estadoDeVisita } from './estadoEnvio.ts';
 
 const AHORA = 1_700_000_000_000;
 /** El CAP conectado en casi todas las pruebas. */
@@ -372,11 +374,16 @@ describe('tras el envío inmediato del formulario', () => {
     assert.equal(almacen.contenido.size, 0);
   });
 
-  // El formulario sigue abierto con todo: el CAP lo corrige allí.
-  test('rechazo del backend → se quita de la cola', async () => {
+  // El CAP ya vio la confirmación y salió del formulario: borrarla la
+  // perdería. Se queda, marcada para revisar, y no se reintenta sola.
+  test('rechazo del backend → se queda en la cola para revisar', async () => {
     const almacen = almacenFalso([visita()]);
-    await registrarResultado(almacen, visita(), 'error', AHORA);
-    assert.equal(almacen.contenido.size, 0);
+    await registrarResultado(almacen, visita(), 'error', AHORA, 'Status requerido');
+
+    const v = almacen.contenido.get('v-1')!;
+    assert.equal(v.revisar, true);
+    assert.equal(v.ultimoError, 'Status requerido');
+    assert.equal(esperaEnvioManual(v), true, 'no se reintenta sola');
   });
 
   test('corte por el camino → queda en la cola con el intento contado', async () => {
@@ -442,5 +449,133 @@ describe('hora real en los reintentos', () => {
 
     assert.deepEqual(enviados, [GUARDADO, GUARDADO]);
     assert.equal(almacen.contenido.size, 0);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('guardar primero en el celular', () => {
+  /** Un envío que no responde nunca, como Apps Script subiendo fotos con mala señal. */
+  const colgado = () => new Promise<ApiResponse<unknown>>(() => {});
+
+  // El caso del iPhone: el CAP se quedaba mirando "Guardando…".
+  test('vuelve en cuanto la visita está en el celular, sin esperar a la red', async () => {
+    const almacen = almacenFalso();
+    const enVuelo = new Set<string>();
+
+    const r = await guardarPrimeroLocal({ almacen, entrada: visita(), enviar: colgado, enVuelo });
+
+    assert.equal(r.enCola, true);
+    assert.ok(almacen.contenido.has('v-1'), 'ya está en la cola, fotos incluidas');
+    assert.ok(enVuelo.has('v-1'), 'y se está enviando por detrás');
+    assert.equal(estadoDeVisita({ enCola: almacen.contenido.get('v-1'), enVuelo: true, sesionVencida: false }), 'enviando');
+  });
+
+  test('mientras se envía, la cola no la manda otra vez', async () => {
+    const almacen = almacenFalso();
+    const enVuelo = new Set<string>();
+    await guardarPrimeroLocal({ almacen, entrada: visita(), enviar: colgado, enVuelo });
+
+    let llamadas = 0;
+    await procesarCola({
+      almacen,
+      correo: CORREO,
+      forzar: true,
+      excluir: enVuelo,
+      enviar: async () => {
+        llamadas++;
+        return { ok: true };
+      },
+    });
+    assert.equal(llamadas, 0);
+  });
+
+  test('cuando llega, sale de la cola y queda como enviada', async () => {
+    const almacen = almacenFalso();
+    const enVuelo = new Set<string>();
+    const r = await guardarPrimeroLocal({ almacen, entrada: visita(), enviar: exito, enVuelo });
+    assert.ok(r.enCola);
+    assert.equal((await r.envio).resultado, 'guardada');
+
+    assert.equal(enVuelo.size, 0);
+    assert.equal(almacen.contenido.size, 0);
+    assert.equal(estadoDeVisita({ enCola: undefined, enVuelo: false, sesionVencida: false }), 'enviada');
+  });
+
+  // Sin señal: queda pendiente y la cola la reintenta con su hora real.
+  test('si falla la red, queda pendiente y el reintento lleva el mismo creado_en', async () => {
+    const GUARDADO = 1_700_000_000_000;
+    const almacen = almacenFalso();
+    const enVuelo = new Set<string>();
+    const entrada = visita({ payload: { comercio: 'Tambo+', creado_en: GUARDADO } });
+
+    // Como lo devuelve api() de verdad cuando no hay red: con la marca.
+    const corteDeRed = async (): Promise<ApiResponse<unknown>> => ({
+      ok: false,
+      reintentable: true,
+      error: 'Sin conexión a internet.',
+    });
+    const r = await guardarPrimeroLocal({ almacen, entrada, enviar: corteDeRed, enVuelo, ahora: () => GUARDADO });
+    assert.ok(r.enCola);
+    assert.equal((await r.envio).resultado, 'reintentar');
+    const v = almacen.contenido.get('v-1')!;
+    assert.equal(estadoDeVisita({ enCola: v, enVuelo: false, sesionVencida: false }), 'pendiente');
+
+    const enviados: unknown[] = [];
+    await procesarCola({
+      almacen,
+      correo: CORREO,
+      ahora: v.proximoIntento,
+      enviar: async (p) => {
+        enviados.push(p.creado_en);
+        return { ok: true };
+      },
+    });
+    assert.deepEqual(enviados, [GUARDADO]);
+  });
+
+  test('con la sesión vencida queda en la cola', async () => {
+    const almacen = almacenFalso();
+    const r = await guardarPrimeroLocal({ almacen, entrada: visita(), enviar: sesionVencida, enVuelo: new Set() });
+    assert.ok(r.enCola);
+    assert.equal((await r.envio).resultado, 'sesion');
+    const v = almacen.contenido.get('v-1');
+    assert.ok(v);
+    assert.equal(estadoDeVisita({ enCola: v, enVuelo: false, sesionVencida: true }), 'sesion');
+  });
+
+  test('un rechazo del backend queda para revisar y no se pierde', async () => {
+    const almacen = almacenFalso();
+    const rechazo = async (): Promise<ApiResponse<unknown>> => ({ ok: false, error: 'Comercio requerido' });
+    const r = await guardarPrimeroLocal({ almacen, entrada: visita(), enviar: rechazo, enVuelo: new Set() });
+    assert.ok(r.enCola);
+    await r.envio;
+
+    const v = almacen.contenido.get('v-1')!;
+    assert.equal(estadoDeVisita({ enCola: v, enVuelo: false, sesionVencida: false }), 'revisar');
+
+    // El botón Reintentar la manda aunque esté para revisar.
+    let llamadas = 0;
+    await procesarCola({ almacen, correo: CORREO, enviar: async () => (llamadas++, { ok: true }) });
+    assert.equal(llamadas, 0, 'sola no se reintenta');
+    await procesarCola({ almacen, correo: CORREO, forzar: true, enviar: async () => (llamadas++, { ok: true }) });
+    assert.equal(llamadas, 1);
+    assert.equal(almacen.contenido.size, 0);
+  });
+
+  // Modo privado: sin IndexedDB, la pantalla vuelve al envío de siempre.
+  test('si no se puede guardar en el celular, lo dice para enviar a la antigua', async () => {
+    const almacen = almacenFalso();
+    almacen.guardar = async () => {
+      throw new Error('IndexedDB no disponible');
+    };
+    let llamadas = 0;
+    const r = await guardarPrimeroLocal({
+      almacen,
+      entrada: visita(),
+      enviar: async () => (llamadas++, { ok: true }),
+      enVuelo: new Set(),
+    });
+    assert.equal(r.enCola, false);
+    assert.equal(llamadas, 0, 'no envía nada por su cuenta');
   });
 });
