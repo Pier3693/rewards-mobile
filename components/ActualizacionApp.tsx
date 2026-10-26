@@ -43,6 +43,12 @@ export default function ActualizacionApp() {
       })
       .catch(() => {});
 
+    // La instalación solo guarda lo crítico. Ya activo, se le pide que
+    // guarde las pantallas principales para abrir sin señal.
+    navigator.serviceWorker.ready
+      .then((reg) => reg.active?.postMessage({ tipo: 'PRECALENTAR_BASE' }))
+      .catch(() => {});
+
     const alCambiarControlador = () => {
       if (recargando.current) return;
       recargando.current = true;
