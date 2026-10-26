@@ -312,8 +312,10 @@ body {
 /* ══ Mapa de la ruta (/mapa) ══
    El mapa va de arriba hasta el borde de la barra de abajo: así la
    barra no tapa la atribución de OpenStreetMap ni los controles. */
+/* .leaflet-container: el CSS de Leaflet llega después y pisaría el fondo. */
+.mapa-lienzo.leaflet-container,
 .mapa-lienzo {
-  bottom: calc(5rem + env(safe-area-inset-bottom));
+  bottom: calc(5.25rem + env(safe-area-inset-bottom));
   background: var(--color-campo);
 }
 .mapa-arriba {
@@ -324,18 +326,18 @@ body {
   pointer-events: auto;
 }
 .mapa-abajo {
-  bottom: calc(5.75rem + env(safe-area-inset-bottom));
+  bottom: calc(6rem + env(safe-area-inset-bottom));
 }
 
 /* Atribución legible en claro y en oscuro. */
-.mapa-lienzo .leaflet-control-attribution {
+.mapa-lienzo.leaflet-container .leaflet-control-attribution {
   background: var(--color-barra);
   color: var(--color-ink-2);
   font-size: 11px;
   padding: 2px 6px;
   border-top-left-radius: 6px;
 }
-.mapa-lienzo .leaflet-control-attribution a {
+.mapa-lienzo.leaflet-container .leaflet-control-attribution a {
   color: var(--color-primary-texto);
 }
 

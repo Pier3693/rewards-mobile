@@ -20,7 +20,8 @@
 //       la causa en vez de taparla)
 //
 //  Variables: BASE_URL (por defecto http://localhost:3000),
-//  CHROME_PATH y SALIDA (carpeta de las capturas).
+//  CHROME_PATH, SALIDA (carpeta de las capturas) y PANTALLAS
+//  (solo esas, separadas por coma: PANTALLAS=mapa,mapa-hoja).
 // ══════════════════════════════════════════════════
 
 import { spawn } from 'node:child_process';
@@ -105,17 +106,24 @@ const local = (id) => ({
 const hoy = new Date();
 const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
 
+/** 1×1 transparente. */
+const PNG_VACIO =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=';
+
 const RESPUESTAS = {
   getAsignacionesDia: {
     ok: true,
     data: {
       fecha: fechaHoy,
       pendientes: [
-        parada('ASG-1', 'PC-0001'),
+        // Coordenadas en dos de las tres, para el mapa.
+        parada('ASG-1', 'PC-0001', { lat: -12.1211, lng: -77.0297, geo_estado: 'OK' }),
         parada('ASG-2', 'CC-0002', { motivo: 'Capacitación Virtual', meet_link: 'meet.google.com/abc-defg-hij', hora: '12:00', hora_fin: '13:00', estado: 'rango' }),
-        parada('ASG-3', 'CC-0003', { motivo: 'Branding', hora: '15:00' }),
+        parada('ASG-3', 'CC-0003', { motivo: 'Branding', hora: '15:00', lat: -12.0886, lng: -77.0158, geo_estado: 'Aproximado' }),
       ],
-      completadas: [parada('ASG-0', 'PC-0009', { status: 'Completado', resultado: 'Incidencia', hora: '09:00' })],
+      completadas: [
+        parada('ASG-0', 'PC-0009', { status: 'Completado', resultado: 'Incidencia', hora: '09:00', lat: -12.1105, lng: -77.0352, geo_estado: 'OK' }),
+      ],
       total: 4,
     },
   },
@@ -246,9 +254,22 @@ async function nuevaPestana(cdp, { ancho, alto }, tema) {
   await s('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: tema }] });
 
   // /api/gs con datos de mentira.
-  await s('Fetch.enable', { patterns: [{ urlPattern: '*/api/gs*' }] });
+  // Los mosaicos del mapa, con un PNG vacío: la prueba no pide nada a OpenStreetMap.
+  await s('Fetch.enable', { patterns: [{ urlPattern: '*/api/gs*' }, { urlPattern: '*tile.openstreetmap.org*' }] });
   cdp.on(async (m) => {
     if (m.sessionId !== sessionId || m.method !== 'Fetch.requestPaused') return;
+    if (m.params.request.url.includes('tile.openstreetmap.org')) {
+      await s('Fetch.fulfillRequest', {
+        requestId: m.params.requestId,
+        responseCode: 200,
+        responseHeaders: [
+          { name: 'Content-Type', value: 'image/png' },
+          { name: 'Access-Control-Allow-Origin', value: '*' },
+        ],
+        body: PNG_VACIO,
+      }).catch(() => {});
+      return;
+    }
     let cuerpo = {};
     try {
       cuerpo = JSON.parse(m.params.request.postData || '{}');
@@ -501,7 +522,51 @@ const PANTALLAS = [
     },
   },
   { nombre: 'perfil', pasos: async (p) => p.ir('/perfil', 2500) },
+  {
+    nombre: 'mapa',
+    // Pone su propia sesión: así sirve también con PANTALLAS=mapa.
+    pasos: async (p) => {
+      await p.ir('/login', 500);
+      await p.evaluar(SESION);
+      await p.ir('/mapa', 3000);
+    },
+  },
+  {
+    nombre: 'mapa-hoja',
+    pasos: async (p) => {
+      await p.evaluar(`(() => { const m = document.querySelector('.leaflet-marker-icon'); if (m) m.click(); return !!m; })()`);
+      await esperar(1200);
+    },
+  },
 ];
+
+/**
+ * En el mapa, la barra de abajo no puede tapar la atribución ni la ficha
+ * de "sin ubicación", y los botones tienen que medir 44 px.
+ */
+const MEDIR_MAPA = `(() => {
+  const barra = document.querySelector('nav')?.getBoundingClientRect();
+  const problemas = [];
+  const debajo = (sel, nombre) => {
+    const e = document.querySelector(sel);
+    if (!e) return problemas.push('falta ' + nombre);
+    const r = e.getBoundingClientRect();
+    if (barra && r.bottom > barra.top + 0.5) problemas.push(nombre + ' bajo la barra (' + Math.round(r.bottom) + ' > ' + Math.round(barra.top) + ')');
+  };
+  debajo('.leaflet-control-attribution', 'la atribución');
+  debajo('.mapa-abajo', 'la ficha sin ubicación');
+  for (const b of document.querySelectorAll('.mapa-ruta button')) {
+    const r = b.getBoundingClientRect();
+    const toque = getComputedStyle(b, '::after').width === '44px';
+    if (!toque && (r.width < 43.5 || r.height < 43.5)) problemas.push('botón chico ' + Math.round(r.width) + '×' + Math.round(r.height) + ' «' + (b.textContent || b.getAttribute('aria-label')).trim().slice(0, 30) + '»');
+  }
+  const atribucion = document.querySelector('.leaflet-control-attribution')?.textContent || '';
+  if (!atribucion.includes('OpenStreetMap')) problemas.push('sin atribución de OpenStreetMap');
+  return problemas;
+})()`;
+
+const SOLO = (process.env.PANTALLAS || '').split(',').map((n) => n.trim()).filter(Boolean);
+const ELEGIDAS = SOLO.length ? PANTALLAS.filter((p) => SOLO.includes(p.nombre)) : PANTALLAS;
 
 // ── Recorrido ─────────────────────────────────────
 
@@ -516,7 +581,7 @@ async function main() {
       for (const tema of TEMAS) {
         const p = await nuevaPestana(cdp, vp, tema);
         console.log(`\n── ${vp.ancho}×${vp.alto} · ${tema === 'dark' ? 'oscuro' : 'claro'}${SIN_SEGURO ? ' · sin seguro' : ''} ──`);
-        for (const pantalla of PANTALLAS) {
+        for (const pantalla of ELEGIDAS) {
           try {
             await pantalla.pasos(p);
             const r = await p.evaluar(MEDIR);
@@ -541,6 +606,12 @@ async function main() {
             }
             await p.captura(`${pantalla.nombre}-${vp.ancho}-${tema}${SIN_SEGURO ? '-sin-seguro' : ''}`);
 
+            if (pantalla.nombre === 'mapa') {
+              const problemas = await p.evaluar(MEDIR_MAPA);
+              for (const pr of problemas) console.log(`      ✗ mapa: ${pr}`);
+              fallos += problemas.length;
+            }
+
             // El encabezado fijo del registro tiene que seguir arriba al hacer scroll.
             if (pantalla.nombre === 'registro-paso3' && encabezadoFijo === null) {
               encabezadoFijo = await p.evaluar(`(async () => {
@@ -563,7 +634,7 @@ async function main() {
     cerrarChrome(proceso);
   }
 
-  console.log(`\nEncabezado fijo del registro tras hacer scroll: top = ${encabezadoFijo}px (0 = sigue arriba)`);
+  if (encabezadoFijo !== null) console.log(`\nEncabezado fijo del registro tras hacer scroll: top = ${encabezadoFijo}px (0 = sigue arriba)`);
   console.log(`Capturas en ${SALIDA}`);
   if (fallos) {
     console.log(`\n${fallos} pantalla(s) con desborde o error.`);

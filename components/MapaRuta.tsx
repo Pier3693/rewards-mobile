@@ -131,7 +131,8 @@ export default function MapaRuta() {
       );
       if (!e) return;
       if (e.tipo === 'centro') m.setView([e.centro.lat, e.centro.lng], e.zoom);
-      else m.fitBounds(e.limites, { padding: [56, 56], maxZoom: 16 });
+      // Más margen arriba: ahí van el título y los avisos.
+      else m.fitBounds(e.limites, { paddingTopLeft: [48, 230], paddingBottomRight: [48, 72], maxZoom: 16 });
     },
     [paradas, ubicacion],
   );
