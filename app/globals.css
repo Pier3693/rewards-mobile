@@ -308,3 +308,89 @@ body {
 .animate-sheet-up {
   animation: sheetUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 }
+
+/* ══ Mapa de la ruta (/mapa) ══
+   El mapa va de arriba hasta el borde de la barra de abajo: así la
+   barra no tapa la atribución de OpenStreetMap ni los controles. */
+.mapa-lienzo {
+  bottom: calc(5rem + env(safe-area-inset-bottom));
+  background: var(--color-campo);
+}
+.mapa-arriba {
+  top: calc(0.75rem + env(safe-area-inset-top));
+  pointer-events: none;
+}
+.mapa-arriba > * > * {
+  pointer-events: auto;
+}
+.mapa-abajo {
+  bottom: calc(5.75rem + env(safe-area-inset-bottom));
+}
+
+/* Atribución legible en claro y en oscuro. */
+.mapa-lienzo .leaflet-control-attribution {
+  background: var(--color-barra);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-top-left-radius: 6px;
+}
+.mapa-lienzo .leaflet-control-attribution a {
+  color: var(--color-primary-texto);
+}
+
+/* En oscuro, los mosaicos se oscurecen con un filtro: los marcadores y
+   el punto azul van en otra capa y no lo heredan. */
+:root[data-theme='dark'] .mapa-lienzo .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.5);
+}
+
+/* Marcadores: la zona tocable es el divIcon de 44 px; el círculo, 30. */
+.marcador-mapa {
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+}
+.marcador {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--marcador);
+  color: var(--color-sobre-estado);
+  font: 700 13px/1 system-ui, -apple-system, sans-serif;
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.marcador--hecha {
+  opacity: 0.6;
+}
+.marcador--pendiente {
+  box-shadow: 0 0 0 3px var(--color-warn), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.marcador--lista {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+/* El CAP: el punto azul de iOS y su círculo de precisión. */
+.punto-cap {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0a84ff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.precision-cap {
+  fill: #0a84ff;
+  fill-opacity: 0.12;
+  stroke: #0a84ff;
+  stroke-opacity: 0.35;
+  stroke-width: 1;
+}

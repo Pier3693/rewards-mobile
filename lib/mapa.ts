@@ -37,7 +37,7 @@ export const ZOOM_UN_PUNTO = 16;
  * texto; descarta lo vacío, el 0 (una celda vacía convertida) y lo que
  * está fuera de rango.
  */
-export function coordenadasDe(p: { lat?: unknown; lng?: unknown }): Coordenadas | null {
+export function coordenadasDe(p: { [k: string]: unknown }): Coordenadas | null {
   const lat = Number(p.lat);
   const lng = Number(p.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;

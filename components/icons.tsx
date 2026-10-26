@@ -146,6 +146,27 @@ export function IconX({ className = 'h-4 w-4' }: P) {
   );
 }
 
+/** Mapa plegado: la pestaña Mapa. */
+export function IconMapa({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 4.5 3.5 6.6v13l5.5-2.1 6 2.1 5.5-2.1v-13L15 6.6l-6-2.1Z" />
+      <path d="M9 4.5v13M15 6.6v13" />
+    </svg>
+  );
+}
+
+/** Punto de mira: "Centrar en mí" en el mapa. */
+export function IconUbicacion({ className = 'h-5 w-5' }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="6.5" />
+      <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+      <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+    </svg>
+  );
+}
+
 export function IconMapPin({ className = 'h-4 w-4' }: P) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
