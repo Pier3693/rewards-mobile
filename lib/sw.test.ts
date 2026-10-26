@@ -138,12 +138,16 @@ function montarSw(
     return estado;
   }
 
+  /** Cuántas veces un evento pidió que lo mantuvieran vivo. */
+  let mantenidoVivo = 0;
+
   /** Una petición del navegador: devuelve lo que respondió el service worker. */
   async function pedir(url: string, mode = 'no-cors') {
     let respuesta: Promise<unknown> | undefined;
     oyentes.get('fetch')!({
       request: { method: 'GET', url: `http://localhost${url}`, mode, headers: new Headers() },
       respondWith: (r: Promise<unknown>) => (respuesta = r),
+      waitUntil: () => void mantenidoVivo++,
     });
     return respuesta ? await respuesta : undefined;
   }
@@ -152,6 +156,7 @@ function montarSw(
     lanzar,
     pedir,
     caches,
+    mantenidoVivo: () => mantenidoVivo,
     /** La caché de esta versión. */
     cache: () => caches.get(`rewards-${version}`)!,
     pedidos,
@@ -464,6 +469,8 @@ describe('actualizar sin perder lo guardado', () => {
     A: '/_next/static/chunks/app/(app)/local/%5Bid%5D/page-aaaa.js',
     B: '/_next/static/chunks/app/(app)/local/%5Bid%5D/page-bbbb.js',
   };
+  /** Lleva hash: si no cambió, A y B lo comparten. */
+  const COMUN = '/_next/static/chunks/255-comun.js';
   const PARADAS = ['/local/PC-0737', '/visita/PC-0737'];
 
   /** Un servidor que sirve la versión que toque, o nada si no hay señal. */
@@ -486,7 +493,7 @@ describe('actualizar sin perder lo guardado', () => {
   async function versionAConTodo() {
     const caches = new Map<string, Map<string, unknown>>();
     const srv = servidor();
-    const a = montarSw(srv.fetch, [CHUNK.A], { version: 'A', caches });
+    const a = montarSw(srv.fetch, [CHUNK.A, COMUN], { version: 'A', caches });
     a.lanzar('install');
     await soltar();
     a.lanzar('activate');
@@ -501,12 +508,13 @@ describe('actualizar sin perder lo guardado', () => {
     return (r as RespuestaFalsa).text();
   }
 
-  // Tu punto 3: A con todo → se instala B → activate → sin señal.
-  test('con señal al activar, sin señal después abre todo con la versión B', async () => {
+  // Con señal, todo lo de B llega DESPUÉS de activarse, sin que la
+  // página mande nada.
+  test('con señal, tras activar se guardan los archivos de B y las paradas', async () => {
     const { caches, srv } = await versionAConTodo();
 
     srv.estado.version = 'B';
-    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    const b = montarSw(srv.fetch, [CHUNK.B, COMUN], { version: 'B', caches });
     b.lanzar('install');
     await soltar();
     const activate = b.lanzar('activate');
@@ -522,37 +530,62 @@ describe('actualizar sin perder lo guardado', () => {
   });
 
   // Sin señal al activar: la copia de A sirve, con SUS chunks.
-  test('sin señal al activar, las páginas de A siguen abriendo con sus chunks', async () => {
+  test('sin señal tras activar, las páginas de A abren con sus chunks de A', async () => {
     const { caches, srv } = await versionAConTodo();
 
     srv.estado.version = 'B';
     srv.estado.conRed = false;
-    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    const b = montarSw(srv.fetch, [CHUNK.B, COMUN], { version: 'B', caches });
     const activate = b.lanzar('activate');
     await soltar(200);
     assert.equal(activate.terminada, true);
 
     assert.match(await textoDe(await b.pedir('/local/PC-0737', 'navigate')), /pagina A/);
     assert.equal(await textoDe(await b.pedir(CHUNK.A)), `codigo de ${CHUNK.A}`);
+    // El de esta versión que ya tenía A, copiado sin bajarlo.
+    assert.equal(await textoDe(await b.pedir(COMUN)), `codigo de ${COMUN}`);
     assert.equal(caches.has('rewards-A'), false);
   });
 
-  test('la caché vieja no se borra antes de terminar la copia', async () => {
+  // El riesgo que se corrige: mientras se activa, el navegador retiene
+  // las peticiones de la app. Con mala señal, la pantalla en blanco.
+  test('el activate termina rápido aunque la red no responda', async () => {
     const { caches, srv } = await versionAConTodo();
 
     srv.estado.version = 'B';
     srv.estado.colgado = true;
-    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    const b = montarSw(srv.fetch, [CHUNK.B, COMUN], { version: 'B', caches });
     const activate = b.lanzar('activate');
 
+    // Sin mover el reloj: no espera a ninguna descarga.
     await soltar(100);
-    assert.equal(activate.terminada, false, 'sigue guardando');
-    assert.equal(caches.has('rewards-A'), true, 'A sigue ahí mientras tanto');
-
-    // Cada descarga colgada se corta a los 10 s; el tope total es de 45 s.
-    for (let i = 0; i < 6 && !activate.terminada; i++) await avanzar(MS_LIMITE);
     assert.equal(activate.terminada, true);
-    assert.equal(caches.has('rewards-A'), false);
+    assert.equal(activate.error, null);
+    assert.ok(b.cache().has('/local/PC-0737'), 'ya copió la parada');
+    assert.ok(b.cache().has(COMUN), 'y el chunk que no cambió');
+    assert.equal(caches.has('rewards-A'), false, 'y borró la vieja');
+  });
+
+  test('una navegación durante las descargas no queda retenida', async () => {
+    const { caches, srv } = await versionAConTodo();
+
+    srv.estado.version = 'B';
+    srv.estado.colgado = true;
+    const b = montarSw(srv.fetch, [CHUNK.B, COMUN], { version: 'B', caches });
+    b.lanzar('activate');
+    await soltar(100);
+
+    // Las descargas siguen colgadas (10 s cada una). La navegación solo
+    // espera los 4 s de la red y responde con la copia.
+    let respuesta: unknown;
+    b.pedir('/local/PC-0737', 'navigate').then((r) => (respuesta = r));
+    await soltar();
+    assert.equal(respuesta, undefined, 'todavía esperando a la red');
+
+    await avanzar(4000);
+    assert.ok(respuesta, 'respondió a los 4 s, sin esperar a las descargas');
+    assert.match(await textoDe(respuesta), /pagina A/);
+    assert.ok(b.mantenidoVivo() > 0, 'y mantuvo viva la puesta al día');
   });
 
   // Sin que la página mande nada: el service worker se acuerda.
@@ -561,7 +594,7 @@ describe('actualizar sin perder lo guardado', () => {
     assert.ok(caches.has('rw-meta'));
 
     srv.estado.version = 'B';
-    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    const b = montarSw(srv.fetch, [CHUNK.B, COMUN], { version: 'B', caches });
     b.lanzar('activate');
     await soltar(200);
 
