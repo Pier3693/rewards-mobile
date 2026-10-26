@@ -66,9 +66,12 @@ function montarSw(fetchFalso: Fetch) {
     async open(nombre: string) {
       if (!caches.has(nombre)) caches.set(nombre, new Map());
       const c = caches.get(nombre)!;
+      // Como la Cache API: una petición se busca por su URL, sin el origen.
+      const clave = (k: string | { url: string }) =>
+        typeof k === 'string' ? k : new URL(k.url).pathname;
       return {
-        match: async (k: string) => c.get(String(k)),
-        put: async (k: string, v: unknown) => void c.set(String(k), v),
+        match: async (k: string | { url: string }) => c.get(clave(k)),
+        put: async (k: string | { url: string }, v: unknown) => void c.set(clave(k), v),
       };
     },
     keys: async () => [...caches.keys()],
@@ -114,7 +117,29 @@ function montarSw(fetchFalso: Fetch) {
     return estado;
   }
 
-  return { lanzar, caches, pedidos, reclamado: () => reclamado };
+  /** Una petición del navegador: devuelve lo que respondió el service worker. */
+  async function pedir(url: string, mode = 'no-cors') {
+    let respuesta: Promise<unknown> | undefined;
+    oyentes.get('fetch')!({
+      request: { method: 'GET', url: `http://localhost${url}`, mode, headers: new Headers() },
+      respondWith: (r: Promise<unknown>) => (respuesta = r),
+    });
+    return respuesta ? await respuesta : undefined;
+  }
+
+  return {
+    lanzar,
+    pedir,
+    caches,
+    pedidos,
+    reclamado: () => reclamado,
+    /** Las funciones del script, para probarlas sueltas. */
+    // Los arrays del contexto de vm tienen otro prototipo: se copian.
+    sw: {
+      recursosDe: (html: string): string[] => [...contexto.recursosDe(html)],
+      claveDe: (ruta: string): string => contexto.claveDe(ruta),
+    },
+  };
 }
 
 /** Deja correr las promesas pendientes, sin mover el reloj. */
@@ -276,5 +301,70 @@ describe('lo que sirve /sw.js', () => {
 
   test('se sirve como JavaScript', () => {
     assert.match(GET().headers.get('Content-Type') || '', /javascript/);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('rutas de los chunks', () => {
+  const VISITA = '/_next/static/chunks/app/(app)/visita/%5Bid%5D/page-aea1f8ab5aad3f12.js';
+
+  // El fallo que se corrige: se cortaba en el primer ")" y quedaba
+  // "/_next/static/chunks/app/(app", así que el chunk nunca se guardaba.
+  test('recursosDe saca la ruta completa con (app) y %5Bid%5D', () => {
+    const { sw } = montarSw(async () => respuesta());
+    const html = `<script src="${VISITA}" async=""></script>`;
+    assert.deepEqual(sw.recursosDe(html), [VISITA]);
+  });
+
+  test('también las que vienen en los datos RSC, sin /_next/', () => {
+    const { sw } = montarSw(async () => respuesta());
+    const html =
+      '<script>self.__next_f.push([1,"3:I[\\"static/chunks/app/(app)/hoy/page-42f2.js\\",' +
+      '\\"static/chunks/app/(app)/layout-e66a.js\\"]"])</script>';
+    assert.deepEqual(sw.recursosDe(html).sort(), [
+      '/_next/static/chunks/app/(app)/hoy/page-42f2.js',
+      '/_next/static/chunks/app/(app)/layout-e66a.js',
+    ]);
+  });
+
+  test('un url(...) de CSS no se lleva el paréntesis', () => {
+    const { sw } = montarSw(async () => respuesta());
+    const html = '<style>@font-face{src:url(/_next/static/media/inter.woff2) format("woff2")}</style>';
+    assert.deepEqual(sw.recursosDe(html), ['/_next/static/media/inter.woff2']);
+  });
+
+  test('no repite la misma ruta', () => {
+    const { sw } = montarSw(async () => respuesta());
+    const html = `<link rel="preload" href="${VISITA}"><script src="${VISITA}"></script>`;
+    assert.equal(sw.recursosDe(html).length, 1);
+  });
+
+  // El manifest de Next escribe [id]; el navegador pide %5Bid%5D.
+  test('[id] y %5Bid%5D dan la misma clave, la que pide el navegador', () => {
+    const { sw } = montarSw(async () => respuesta());
+    const conCorchetes = '/_next/static/chunks/app/(app)/visita/[id]/page-aea1f8ab5aad3f12.js';
+    assert.equal(sw.claveDe(conCorchetes), VISITA);
+    assert.equal(sw.claveDe(VISITA), VISITA);
+  });
+
+  test('un % suelto no revienta', () => {
+    const { sw } = montarSw(async () => respuesta());
+    assert.equal(sw.claveDe('/_next/static/x%zz.js'), '/_next/static/x%zz.js');
+  });
+
+  test('la petición del navegador encuentra lo guardado', async () => {
+    const html = `<script src="${VISITA}"></script>`;
+    let conRed = true;
+    const sw = montarSw(async (url) => {
+      if (!conRed) throw new TypeError('Failed to fetch');
+      return respuesta(url === '/visita/PC-1' ? html : 'codigo');
+    });
+
+    sw.lanzar('message', { data: { tipo: 'precalentar', rutas: ['/visita/PC-1'] } });
+    await soltar();
+
+    conRed = false;
+    const r = (await sw.pedir(VISITA)) as RespuestaFalsa;
+    assert.equal(await r.text(), 'codigo');
   });
 });
