@@ -127,7 +127,7 @@ export default function HistorialPage() {
 
       {/* ── Filtro ── */}
       {datos && !sinNada && (
-        <div className="sin-barra-scroll -mx-5 mb-4 flex gap-2 overflow-x-auto px-5">
+        <div className="sin-barra-scroll -mx-5 mb-4 flex gap-2 overflow-x-auto overscroll-x-contain px-5">
           {FILTROS.map((f) => {
             const activo = filtro === f.valor;
             return (
@@ -335,7 +335,7 @@ function Detalle({
           {tipo}
         </span>
       )}
-      <p className="whitespace-pre-line text-[14px]">{texto || 'Sin observaciones.'}</p>
+      <p className="whitespace-pre-line text-[14px] wrap-anywhere">{texto || 'Sin observaciones.'}</p>
 
       <h3 className="mb-1.5 mt-5 text-[11px] font-bold uppercase tracking-wider text-ink-2">Fotos</h3>
       {base64.length + fotos.length === 0 ? (

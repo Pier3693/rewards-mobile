@@ -178,7 +178,7 @@ export default function PerfilPage() {
           {iniciales}
         </span>
         <p className="mt-3 text-lg font-bold">{user?.nombre || '—'}</p>
-        <p className="text-sm text-ink-2">{user?.correo || ''}</p>
+        <p className="text-sm text-ink-2 wrap-anywhere">{user?.correo || ''}</p>
         {user?.rol && (
           <span className="mt-2 inline-block rounded-full bg-primary-light px-3 py-1 text-[12px] font-semibold text-primary">
             {rolLegible(user.rol)}

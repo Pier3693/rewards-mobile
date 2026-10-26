@@ -70,6 +70,17 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Seguro contra el desborde horizontal: si algo llega a ser más ancho que
+   la pantalla, se recorta en vez de dejar deslizar toda la app de lado.
+   Es `clip` y no `hidden`: `hidden` crearía un contenedor de scroll y los
+   encabezados sticky (Registro, Detalle) dejarían de quedarse arriba.
+   Las causas se corrigen en su sitio; esto es solo la red. */
+html,
+body {
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+}
+
 /* ══ Modo oscuro, como el de iPhone ══
    data-theme lo pone el script del <head> (lib/tema.ts) antes de pintar.
 
@@ -173,6 +184,9 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   overscroll-behavior-y: none;
+  /* Una URL o un correo sin espacios se parte en vez de ensanchar la
+     pantalla. Solo afecta a palabras que no caben en su línea. */
+  overflow-wrap: break-word;
 }
 
 /* ══ Zonas seguras ══

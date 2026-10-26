@@ -180,6 +180,23 @@ describe('zonas seguras', () => {
     }
   });
 
+  // El seguro contra el desborde horizontal: `clip` y no `hidden`, que
+  // crearía un contenedor de scroll y rompería los encabezados sticky.
+  test('html y body recortan lo que se salga de lado, sin romper sticky', () => {
+    const bloque = CSS.match(/html,\s*body\s*\{([^}]*)\}/);
+    assert.ok(bloque, 'falta la regla html, body');
+    assert.match(bloque[1], /overflow-x:\s*clip/);
+    assert.doesNotMatch(bloque[1], /overflow(-x)?:\s*hidden/);
+    assert.match(bloque[1], /overscroll-behavior-x:\s*none/);
+  });
+
+  test('las palabras sin espacios se parten en vez de ensanchar la pantalla', () => {
+    // La regla propia de body (la de html, body es otra).
+    const body = CSS.match(/\n\}\s*\n\s*body\s*\{([^}]*)\}/) || CSS.match(/\nbody\s*\{([^}]*background[^}]*)\}/);
+    assert.ok(body);
+    assert.match(body[1], /overflow-wrap:\s*break-word/);
+  });
+
   // Con 'black-translucent' la hora del iPhone va siempre en blanco.
   test('la hora blanca se lee sobre la franja, en claro', () => {
     exigirAA('franja', '#ffffff', 'surface', CLARO);

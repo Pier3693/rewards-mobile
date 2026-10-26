@@ -337,7 +337,7 @@ export default function LocalPage() {
                 className="flex items-start justify-between gap-3 px-4 py-2.5"
               >
                 <span className="text-[12px] text-ink-2">{f.label}</span>
-                <span className="max-w-[60%] text-right text-[13px] font-medium">
+                <span className="min-w-0 max-w-[60%] text-right text-[13px] font-medium wrap-anywhere">
                   {f.valor}
                 </span>
               </div>
@@ -393,7 +393,7 @@ function ObservacionAnterior({ texto }: { texto: string }) {
           {tipo}
         </span>
       )}
-      {limpio && <p className="text-[12.5px] text-ink">{limpio}</p>}
+      {limpio && <p className="text-[12.5px] text-ink wrap-anywhere">{limpio}</p>}
     </div>
   );
 }
