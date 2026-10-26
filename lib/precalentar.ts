@@ -63,12 +63,36 @@ function leerUltimo(): UltimoEnvio | null {
 }
 
 /**
- * Manda el mensaje al service worker activo. Si es la primera visita y
- * todavía no controla la página, espera a que esté listo.
+ * Espera a que el worker termine de activarse. `ready` ya lo devuelve
+ * mientras se activa, y en ese momento todavía está preparando su caché.
+ */
+export function esperarActivado(w: ServiceWorker): Promise<void> {
+  if (w.state === 'activated' || w.state === 'redundant') return Promise.resolve();
+  return new Promise((resolver) => {
+    const alCambiar = () => {
+      if (w.state === 'activated' || w.state === 'redundant') {
+        w.removeEventListener('statechange', alCambiar);
+        resolver();
+      }
+    };
+    w.addEventListener('statechange', alCambiar);
+  });
+}
+
+/**
+ * Manda el mensaje al service worker ya activado. Si es la primera
+ * visita y todavía no controla la página, espera a que lo esté.
  */
 function mandar(mensaje: unknown) {
   navigator.serviceWorker?.ready
-    .then((reg) => reg.active?.postMessage(mensaje))
+    .then(async (reg) => {
+      const w = reg.active;
+      if (!w) return;
+      await esperarActivado(w);
+      // Si se volvió redundante, ya hay otro activo: ese es el que vale.
+      const activo = w.state === 'activated' ? w : (await navigator.serviceWorker.ready).active;
+      activo?.postMessage(mensaje);
+    })
     .catch(() => {});
 }
 

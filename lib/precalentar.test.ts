@@ -1,7 +1,12 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { decidirPrecalentar, claveDeRutas, MS_ENTRE_ENVIOS } from './precalentar.ts';
+import {
+  decidirPrecalentar,
+  claveDeRutas,
+  esperarActivado,
+  MS_ENTRE_ENVIOS,
+} from './precalentar.ts';
 
 const AHORA = 1_700_000_000_000;
 const RUTA = ['/local/PC-1', '/visita/PC-1', '/local/CC-2', '/visita/CC-2'];
@@ -41,5 +46,48 @@ describe('cuándo se precalienta', () => {
 
   test('el tope es de varios minutos', () => {
     assert.ok(MS_ENTRE_ENVIOS >= 5 * 60_000);
+  });
+});
+
+describe('esperar a que la versión nueva termine de activarse', () => {
+  /** Un ServiceWorker mínimo al que se le puede cambiar el estado. */
+  function worker(state: string) {
+    const oyentes = new Set<() => void>();
+    return {
+      state,
+      addEventListener: (_: string, fn: () => void) => void oyentes.add(fn),
+      removeEventListener: (_: string, fn: () => void) => void oyentes.delete(fn),
+      pasarA(nuevo: string) {
+        this.state = nuevo;
+        [...oyentes].forEach((fn) => fn());
+      },
+      oyentes,
+    };
+  }
+
+  // El fallo que se corrige: se recargaba mientras se activaba, con la
+  // caché nueva todavía a medias.
+  test('mientras se activa, espera', async () => {
+    const w = worker('activating');
+    let listo = false;
+    esperarActivado(w as unknown as ServiceWorker).then(() => (listo = true));
+    await new Promise((r) => setImmediate(r));
+    assert.equal(listo, false);
+
+    w.pasarA('activated');
+    await new Promise((r) => setImmediate(r));
+    assert.equal(listo, true);
+    assert.equal(w.oyentes.size, 0, 'deja de escuchar');
+  });
+
+  test('si ya está activado, no espera', async () => {
+    await esperarActivado(worker('activated') as unknown as ServiceWorker);
+  });
+
+  test('si queda redundante, tampoco se queda esperando', async () => {
+    const w = worker('installed');
+    const p = esperarActivado(w as unknown as ServiceWorker);
+    w.pasarA('redundant');
+    await p;
   });
 });

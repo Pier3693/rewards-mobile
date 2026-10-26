@@ -2,22 +2,26 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { precalentarBase, olvidarPrecalentado } from '@/lib/precalentar';
+import { precalentarBase, olvidarPrecalentado, esperarActivado } from '@/lib/precalentar';
+
+/** Si la activación no termina, se recarga igual pasado este tiempo. */
+const MS_MAXIMO_ACTUALIZAR = 60_000;
 
 /**
  * Registra el service worker y avisa cuando hay una versión nueva.
  *
  * La versión nueva espera (sin skipWaiting a ciegas) hasta que el CAP
- * toca "Actualizar": entonces se activa y la página se recarga una vez.
+ * toca "Actualizar". Se recarga cuando termina de ACTIVARSE, no al
+ * cambiar de controlador: mientras se activa está copiando lo guardado
+ * para trabajar sin señal, y recargar antes la pillaría a medias.
  * El aviso no sale en el registro de visita, porque recargar ahí haría
  * perder las fotos que todavía no están guardadas.
  */
 export default function ActualizacionApp() {
   const pathname = usePathname();
   const [esperando, setEsperando] = useState<ServiceWorker | null>(null);
+  const [actualizando, setActualizando] = useState(false);
   const recargando = useRef(false);
-  /** El CAP tocó "Actualizar": solo entonces se recarga al cambiar de versión. */
-  const pidioActualizar = useRef(false);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
@@ -46,32 +50,38 @@ export default function ActualizacionApp() {
       })
       .catch(() => {});
 
-    // La instalación solo guarda lo crítico. Ya activo, se le pide que
-    // guarde las pantallas principales y los chunks: una vez por sesión.
+    // El service worker ya guarda todo al activarse. Esto es un respaldo
+    // por si algo quedó fuera: una vez por sesión, con él ya activado.
     precalentarBase();
-
-    const alCambiarControlador = () => {
-      // La primera instalación también toma el control (clients.claim):
-      // eso no es una actualización y no hay por qué recargar.
-      if (!pidioActualizar.current || recargando.current) return;
-      recargando.current = true;
-      // La versión nueva estrena caché vacía: hay que volver a pedirle todo.
-      olvidarPrecalentado();
-      window.location.reload();
-    };
 
     // Al volver a la app se pregunta si hay versión nueva.
     const alVolver = () => {
       if (document.visibilityState === 'visible') registro?.update().catch(() => {});
     };
 
-    navigator.serviceWorker.addEventListener('controllerchange', alCambiarControlador);
     document.addEventListener('visibilitychange', alVolver);
-    return () => {
-      navigator.serviceWorker.removeEventListener('controllerchange', alCambiarControlador);
-      document.removeEventListener('visibilitychange', alVolver);
-    };
+    return () => document.removeEventListener('visibilitychange', alVolver);
   }, []);
+
+  function recargar() {
+    if (recargando.current) return;
+    recargando.current = true;
+    // Para que la página vuelva a mandar la base y las paradas a la
+    // versión nueva (el service worker ya las tiene, es un respaldo).
+    olvidarPrecalentado();
+    window.location.reload();
+  }
+
+  function actualizar() {
+    if (!esperando || actualizando) return;
+    setActualizando(true);
+    const tope = setTimeout(recargar, MS_MAXIMO_ACTUALIZAR);
+    esperarActivado(esperando).then(() => {
+      clearTimeout(tope);
+      recargar();
+    });
+    esperando.postMessage({ tipo: 'SALTAR_ESPERA' });
+  }
 
   if (!esperando || pathname?.startsWith('/visita/')) return null;
 
@@ -79,13 +89,11 @@ export default function ActualizacionApp() {
     <div className="fixed inset-x-4 top-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-xl safe-t">
       <p className="min-w-0 flex-1 text-[13px] font-semibold">Hay una nueva versión</p>
       <button
-        onClick={() => {
-          pidioActualizar.current = true;
-          esperando.postMessage({ tipo: 'SALTAR_ESPERA' });
-        }}
-        className="min-h-11 shrink-0 rounded-xl bg-white px-4 text-[13px] font-semibold text-ink"
+        onClick={actualizar}
+        disabled={actualizando}
+        className="min-h-11 shrink-0 rounded-xl bg-white px-4 text-[13px] font-semibold text-ink disabled:opacity-70"
       >
-        Actualizar
+        {actualizando ? 'Actualizando…' : 'Actualizar'}
       </button>
     </div>
   );
