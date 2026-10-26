@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { IconHome, IconSearch, IconPlus, IconUser } from '@/components/icons';
+import { IconHome, IconSearch, IconPlus, IconUser, IconClock } from '@/components/icons';
 
 /**
  * Pantallas secundarias: tienen su propia salida y no llevan barra.
@@ -59,6 +59,11 @@ export default function TabBar() {
           >
             Registrar
           </span>
+        </Link>
+
+        <Link href="/historial" className={item(is('/historial'))}>
+          <IconClock className="h-[22px] w-[22px]" />
+          Historial
         </Link>
 
         <Link href="/perfil" className={item(is('/perfil'))}>

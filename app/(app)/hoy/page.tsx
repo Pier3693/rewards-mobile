@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUsuario, clearSession, marcarSesionExpirada } from '@/lib/auth';
 import { useCola } from '@/lib/useCola';
+import { normalizarStatus } from '@/lib/visita';
 import {
   getRutaDeHoy,
   invalidarRutaDeHoy,
@@ -85,12 +86,7 @@ const RESULTADO_PUNTO: Record<string, string> = {
  */
 function resultadoDe(p: Parada): string {
   if (!estaCompletada(p)) return '';
-  const r = String(p.resultado || '').trim();
-  return (
-    Object.keys(RESULTADO_CLS).find(
-      (k) => k.toLowerCase() === r.toLowerCase(),
-    ) || ''
-  );
+  return normalizarStatus(p.resultado) || '';
 }
 
 export default function HoyPage() {

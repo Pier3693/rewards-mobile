@@ -68,6 +68,15 @@ export const STATUS_LISTA: Status[] = [
 ];
 
 /**
+ * El status tal como lo escribe la app, o null si no es uno de los
+ * cuatro. La hoja puede traerlo con otras mayúsculas o espacios.
+ */
+export function normalizarStatus(texto: string | null | undefined): Status | null {
+  const t = String(texto || '').trim().toLowerCase();
+  return STATUS_LISTA.find((s) => s.toLowerCase() === t) || null;
+}
+
+/**
  * Colores reservados para el resultado de la visita.
  *
  *  suave       chip del resumen
