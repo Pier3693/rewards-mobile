@@ -14,6 +14,7 @@ import {
   precargarLocalesDelDia,
   type DiaData,
 } from '@/lib/cacheDia';
+import { precalentarRutas } from '@/lib/precalentar';
 import { haceCuanto } from '@/lib/texto';
 import {
   ordenarRuta,
@@ -168,29 +169,30 @@ export default function HoyPage() {
     });
   }, [cola.visitas.length]);
 
+  // Los locales de la ruta, solo de lo que dice el backend: la cola y el
+  // reloj cambian `ruta` a menudo, pero no los locales.
+  const localesDeLaRuta = useMemo(
+    () => [...new Set(paradasDelDia(data).map((p) => p.id_local || '').filter(Boolean))],
+    [data],
+  );
+
   // Con señal, se guardan en el celular los locales de la ruta para que
   // el detalle y el registro abran sin conexión.
   useEffect(() => {
-    if (!data || actualizando || navigator.onLine === false) return;
-    precargarLocalesDelDia(ruta.map((p) => p.id_local || ''));
+    if (!localesDeLaRuta.length || actualizando || navigator.onLine === false) return;
+    precargarLocalesDelDia(localesDeLaRuta);
 
     // Y el service worker guarda sus páginas: /local y /visita son
     // dinámicas, así que solo abren sin señal si ya se visitaron o se
-    // guardaron aquí.
-    const rutas = [
-      ...new Set(
-        ruta.flatMap((p) =>
-          p.id_local
-            ? [
-                `/local/${encodeURIComponent(p.id_local)}`,
-                `/visita/${encodeURIComponent(p.id_local)}`,
-              ]
-            : [],
-        ),
-      ),
-    ];
-    navigator.serviceWorker?.controller?.postMessage({ tipo: 'precalentar', rutas });
-  }, [data, ruta, actualizando]);
+    // guardaron aquí. precalentarRutas solo lo manda si la lista cambió,
+    // y como mucho cada 5 minutos.
+    precalentarRutas(
+      localesDeLaRuta.flatMap((id) => [
+        `/local/${encodeURIComponent(id)}`,
+        `/visita/${encodeURIComponent(id)}`,
+      ]),
+    );
+  }, [localesDeLaRuta, actualizando]);
 
   const siguiente = useMemo(() => siguienteParada(ruta, ahora), [ruta, ahora]);
 

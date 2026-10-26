@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { precalentarBase, olvidarPrecalentado } from '@/lib/precalentar';
 
 /**
  * Registra el service worker y avisa cuando hay una versión nueva.
@@ -15,6 +16,8 @@ export default function ActualizacionApp() {
   const pathname = usePathname();
   const [esperando, setEsperando] = useState<ServiceWorker | null>(null);
   const recargando = useRef(false);
+  /** El CAP tocó "Actualizar": solo entonces se recarga al cambiar de versión. */
+  const pidioActualizar = useRef(false);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
@@ -44,14 +47,16 @@ export default function ActualizacionApp() {
       .catch(() => {});
 
     // La instalación solo guarda lo crítico. Ya activo, se le pide que
-    // guarde las pantallas principales para abrir sin señal.
-    navigator.serviceWorker.ready
-      .then((reg) => reg.active?.postMessage({ tipo: 'PRECALENTAR_BASE' }))
-      .catch(() => {});
+    // guarde las pantallas principales y los chunks: una vez por sesión.
+    precalentarBase();
 
     const alCambiarControlador = () => {
-      if (recargando.current) return;
+      // La primera instalación también toma el control (clients.claim):
+      // eso no es una actualización y no hay por qué recargar.
+      if (!pidioActualizar.current || recargando.current) return;
       recargando.current = true;
+      // La versión nueva estrena caché vacía: hay que volver a pedirle todo.
+      olvidarPrecalentado();
       window.location.reload();
     };
 
@@ -74,7 +79,10 @@ export default function ActualizacionApp() {
     <div className="fixed inset-x-4 top-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-xl safe-t">
       <p className="min-w-0 flex-1 text-[13px] font-semibold">Hay una nueva versión</p>
       <button
-        onClick={() => esperando.postMessage({ tipo: 'SALTAR_ESPERA' })}
+        onClick={() => {
+          pidioActualizar.current = true;
+          esperando.postMessage({ tipo: 'SALTAR_ESPERA' });
+        }}
         className="min-h-11 shrink-0 rounded-xl bg-white px-4 text-[13px] font-semibold text-ink"
       >
         Actualizar
