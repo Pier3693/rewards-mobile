@@ -58,7 +58,7 @@ const RESULTADO_CLS: Record<string, string> = {
   'Todo Ok': 'bg-ok-light text-ok',
   Incidencia: 'bg-err-light text-err',
   Reprogramar: 'bg-warn-light text-warn',
-  'No existe': 'bg-gris-light text-ink-2',
+  'No existe': 'bg-gris-suave text-gris',
 };
 
 export default function LocalPage() {
@@ -347,7 +347,7 @@ export default function LocalPage() {
       )}
 
       {/* ── Botón fijo ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur safe-b-min">
+      <div className="fixed inset-x-0 bottom-0 z-30 barra-ios px-5 py-3 safe-b-min">
         <button
           onClick={() => iniciarRegistro()}
           className="btn-grad mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"

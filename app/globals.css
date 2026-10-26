@@ -22,13 +22,26 @@
   --color-warn-light: #fef3c7;
   --color-err: #dc2626;
   --color-err-light: #fee2e2;
+  /* "No existe": gris, distinto de cualquier motivo. */
+  --color-gris: #64748b;
+  --color-gris-suave: #f1f5f9;
+
   --color-ink: #0f172a;
   --color-ink-2: #64748b;
+  /* Terciario: solo para lo que no hay que leer sí o sí (contadores,
+     ayudas). Como en iOS, no llega a AA a propósito. */
+  --color-ink-3: #94a3b8;
   --color-gris-light: #f1f5f9;
   --color-line: #e2e8f0;
   --color-bg: #f4f6fb;
-  /* Fondo de tarjetas, hojas, inputs y barras: blanco en claro. */
+  /* Fondo de tarjetas y hojas. */
   --color-surface: #ffffff;
+  /* Inputs y elementos dentro de una tarjeta. */
+  --color-campo: #ffffff;
+  /* Barras fijas translúcidas (ver .barra-ios). */
+  --color-barra: rgba(255, 255, 255, 0.85);
+  /* Texto o ícono sobre un relleno de status (verde, rojo, ámbar, gris). */
+  --color-sobre-estado: #ffffff;
 
   /* Los mismos colores cuando son TEXTO sobre un fondo. En claro son
      iguales al color fuerte; en oscuro se aclaran para leerse, sin tocar
@@ -41,6 +54,7 @@
   --color-ok-texto: #16a34a;
   --color-warn-texto: #d97706;
   --color-err-texto: #dc2626;
+  --color-gris-texto: #64748b;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', sans-serif;
 }
@@ -49,37 +63,63 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ══ Modo oscuro ══
+/* ══ Modo oscuro, como el de iPhone ══
    data-theme lo pone el script del <head> (lib/tema.ts) antes de pintar.
+
+   Fondos neutros sin tinte azul, y los colores del sistema de iOS. Los
+   chips son el color al 20 % sobre la tarjeta, con el texto en el color
+   fuerte. Tres colores de iOS no llegan a AA como texto sobre su chip
+   (rojo, morado y gris): para el TEXTO se usan sus variantes de
+   "Aumentar contraste" del propio iOS; puntos, rellenos y bordes llevan
+   el color normal.
+
    El morado de marca #3d35c8 no cambia como relleno: botones, gradiente
-   y botón central siguen iguales, y su texto blanco cumple AA.
-   lib/tema.test.ts comprueba el contraste de estos valores. */
+   y botón central, con texto blanco. lib/tema.test.ts comprueba el
+   contraste de todo esto. */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --color-bg: #0b0f1a;
-  --color-surface: #151b2b;
-  --color-line: #2a3349;
-  --color-ink: #e7eaf3;
-  --color-ink-2: #a3adc2;
-  --color-gris-light: #1f2738;
+  --color-bg: #000000;
+  --color-surface: #1c1c1e;
+  --color-campo: #2c2c2e;
+  --color-gris-light: #2c2c2e;
+  --color-line: #38383a;
+  --color-ink: #ffffff;
+  --color-ink-2: rgba(235, 235, 245, 0.6);
+  --color-ink-3: rgba(235, 235, 245, 0.3);
+  --color-barra: rgba(28, 28, 30, 0.78);
+  --color-sobre-estado: #000000;
 
-  --color-primary-light: #262252;
-  --color-motivo-visita-light: #262252;
-  --color-motivo-branding-light: #3a1f0d;
-  --color-motivo-presencial-light: #2e1a45;
-  --color-motivo-virtual-light: #0c2a3d;
-  --color-ok-light: #0f2e1c;
-  --color-warn-light: #33240a;
-  --color-err-light: #3a1416;
+  /* Status */
+  --color-ok: #30d158;
+  --color-err: #ff453a;
+  --color-warn: #ffd60a;
+  --color-gris: #8e8e93;
+  --color-ok-light: rgba(48, 209, 88, 0.2);
+  --color-err-light: rgba(255, 69, 58, 0.2);
+  --color-warn-light: rgba(255, 214, 10, 0.2);
+  --color-gris-suave: rgba(142, 142, 147, 0.2);
+  --color-ok-texto: #30d158;
+  --color-err-texto: #ff6961;
+  --color-warn-texto: #ffd60a;
+  --color-gris-texto: #aeaeb2;
 
-  --color-primary-texto: #b0abff;
-  --color-motivo-visita-texto: #b0abff;
-  --color-motivo-branding-texto: #fdba74;
-  --color-motivo-presencial-texto: #d8b4fe;
-  --color-motivo-virtual-texto: #7dd3fc;
-  --color-ok-texto: #4ade80;
-  --color-warn-texto: #fbbf24;
-  --color-err-texto: #fca5a5;
+  /* Motivos */
+  --color-motivo-visita: #a8a3ff;
+  --color-motivo-branding: #ff9f0a;
+  --color-motivo-presencial: #bf5af2;
+  --color-motivo-virtual: #64d2ff;
+  --color-motivo-visita-light: rgba(168, 163, 255, 0.2);
+  --color-motivo-branding-light: rgba(255, 159, 10, 0.2);
+  --color-motivo-presencial-light: rgba(191, 90, 242, 0.2);
+  --color-motivo-virtual-light: rgba(100, 210, 255, 0.2);
+  --color-motivo-visita-texto: #a8a3ff;
+  --color-motivo-branding-texto: #ff9f0a;
+  --color-motivo-presencial-texto: #da8fff;
+  --color-motivo-virtual-texto: #64d2ff;
+
+  /* Marca: el relleno sigue en #3d35c8; como texto, aclarado. */
+  --color-primary-light: rgba(168, 163, 255, 0.2);
+  --color-primary-texto: #a8a3ff;
 }
 
 /* Fuera de capa a propósito: así ganan a las utilidades de Tailwind sin
@@ -92,6 +132,16 @@ html {
 :root[data-theme='dark'] .text-ok { color: var(--color-ok-texto); }
 :root[data-theme='dark'] .text-warn { color: var(--color-warn-texto); }
 :root[data-theme='dark'] .text-err { color: var(--color-err-texto); }
+:root[data-theme='dark'] .text-gris { color: var(--color-gris-texto); }
+
+/* Barras fijas como las de iOS: translúcidas, con desenfoque y una
+   línea fina arriba. */
+.barra-ios {
+  background: var(--color-barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid var(--color-line);
+}
 
 /* El logo es morado sobre transparente: en oscuro, sobre un círculo
    blanco, para que se siga viendo la marca tal cual. */

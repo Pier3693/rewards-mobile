@@ -771,7 +771,7 @@ export default function VisitaPage() {
       )}
 
       {/* ── Botones ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur safe-b-min">
+      <div className="fixed inset-x-0 bottom-0 z-30 barra-ios px-5 py-3 safe-b-min">
         <div className="mx-auto flex max-w-md gap-2">
           {paso > 1 && (
             <button
@@ -1052,7 +1052,7 @@ function Paso1({
                 onClick={() => onTipo(t)}
                 className={`flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition ${
                   tipoIncidencia === t
-                    ? 'bg-err text-white'
+                    ? 'bg-err text-sobre-estado'
                     : 'border border-line bg-surface text-ink-2'
                 }`}
               >
@@ -1122,7 +1122,7 @@ function Paso2({
                 placeholder={c.placeholder}
                 inputMode={c.modo}
                 aria-invalid={!!fallo}
-                className={`w-full rounded-xl border bg-surface px-4 py-3 text-[15px] outline-none focus:ring-4 ${
+                className={`w-full rounded-xl border bg-campo px-4 py-3 text-[15px] outline-none focus:ring-4 ${
                   fallo
                     ? 'border-err focus:border-err focus:ring-err/10'
                     : 'border-line focus:border-primary focus:ring-primary/10'
@@ -1219,7 +1219,7 @@ function Paso3({
               <button
                 onClick={() => onQuitarFoto(i)}
                 aria-label={`Quitar foto ${i + 1}`}
-                className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-err text-white"
+                className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-err text-sobre-estado"
               >
                 <IconX className="h-3 w-3" />
               </button>
@@ -1263,7 +1263,7 @@ function Paso3({
             onChange={(e) => onObservacion(e.target.value)}
             placeholder="Describe lo que encontraste…"
             rows={4}
-            className={`w-full resize-none rounded-xl border border-line bg-surface py-3 pl-4 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 ${
+            className={`w-full resize-none rounded-xl border border-line bg-campo py-3 pl-4 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 ${
               puedeDictar ? 'pr-16' : 'pr-4'
             }`}
           />
@@ -1274,7 +1274,7 @@ function Paso3({
               aria-label={dictando ? 'Detener dictado' : 'Dictar por voz'}
               className={`absolute bottom-3 right-3 grid h-11 w-11 place-items-center rounded-xl transition ${
                 dictando
-                  ? 'animate-pulse bg-err text-white'
+                  ? 'animate-pulse bg-err text-sobre-estado'
                   : 'bg-primary text-white'
               }`}
             >

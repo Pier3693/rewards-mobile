@@ -28,7 +28,7 @@ export default function TabBar() {
     }`;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-1 backdrop-blur safe-b">
+    <nav className="fixed inset-x-0 bottom-0 z-40 barra-ios pb-1 safe-b">
       <div className="mx-auto flex max-w-md items-end px-2">
         <Link href="/hoy" className={item(is('/hoy'))}>
           <IconHome className="h-[22px] w-[22px]" />

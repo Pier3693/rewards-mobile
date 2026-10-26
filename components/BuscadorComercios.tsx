@@ -149,7 +149,7 @@ export default function BuscadorComercios({
           placeholder="Nombre, dirección o distrito"
           autoComplete="off"
           autoCapitalize="none"
-          className="w-full rounded-2xl border border-line bg-surface py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+          className="w-full rounded-2xl border border-line bg-campo py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
           autoFocus={autoFocus}
         />
         {query && (

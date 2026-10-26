@@ -69,13 +69,13 @@ const RESULTADO_CLS: Record<string, string> = {
   'Todo Ok': 'bg-ok-light text-ok',
   Incidencia: 'bg-err-light text-err',
   Reprogramar: 'bg-warn-light text-warn',
-  'No existe': 'bg-gris-light text-ink-2',
+  'No existe': 'bg-gris-suave text-gris',
 };
 const RESULTADO_PUNTO: Record<string, string> = {
   'Todo Ok': 'bg-ok',
   Incidencia: 'bg-err',
   Reprogramar: 'bg-warn',
-  'No existe': 'bg-ink-2',
+  'No existe': 'bg-gris',
 };
 
 /**
@@ -399,7 +399,7 @@ function EstadoEnvio({
       <button
         onClick={sesionVencida ? onIniciarSesion : onReintentar}
         disabled={enviando}
-        className="mt-2.5 flex min-h-11 items-center gap-2 rounded-xl bg-warn px-4 text-[13px] font-semibold text-white disabled:opacity-60"
+        className="mt-2.5 flex min-h-11 items-center gap-2 rounded-xl bg-warn px-4 text-[13px] font-semibold text-sobre-estado disabled:opacity-60"
       >
         {sesionVencida ? (
           'Iniciar sesión'
@@ -635,7 +635,7 @@ function Fila({
       {/* Riel de la línea de tiempo */}
       <div className="flex w-6 shrink-0 flex-col items-center">
         <span
-          className={`mt-4 grid h-6 w-6 shrink-0 place-items-center rounded-full text-white ${punto}`}
+          className={`mt-4 grid h-6 w-6 shrink-0 place-items-center rounded-full text-sobre-estado ${punto}`}
         >
           {hecha ? <IconCheck className="h-3.5 w-3.5" /> : null}
         </span>

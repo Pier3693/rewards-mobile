@@ -119,7 +119,7 @@ export default function LoginPage() {
             autoCapitalize="none"
             autoCorrect="off"
             autoComplete="username"
-            className="w-full rounded-2xl border border-line bg-surface py-3.5 pl-11 pr-4 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="w-full rounded-2xl border border-line bg-campo py-3.5 pl-11 pr-4 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
             placeholder="Usuario"
           />
         </div>
@@ -141,7 +141,7 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
-            className="w-full rounded-2xl border border-line bg-surface py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="w-full rounded-2xl border border-line bg-campo py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
             placeholder="Contraseña"
           />
           <button

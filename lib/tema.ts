@@ -26,7 +26,7 @@ export const EVENTO_TEMA = 'rw-tema';
  */
 export const COLOR_BARRA: Record<Tema, string> = {
   light: '#3D35C8',
-  dark: '#0B0F1A',
+  dark: '#000000',
 };
 
 export function esPreferencia(v: unknown): v is Preferencia {
