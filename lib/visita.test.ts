@@ -10,6 +10,7 @@ import {
   claveBorrador,
   nuevaIdVisita,
   queHacerTrasEnvio,
+  fijarCreadoEn,
   borradorTieneAlgo,
   borradorCaducado,
   guardarBorrador,
@@ -353,5 +354,23 @@ describe('borrador', () => {
   test('basta un campo con algo para ofrecerlo', () => {
     assert.equal(borradorTieneAlgo({ observacion: 'media frase' }), true);
     assert.equal(borradorTieneAlgo({ observacion: '   ' }), false);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('hora real de la visita', () => {
+  test('la primera vez es el momento de tocar Guardar', () => {
+    assert.deepEqual(fijarCreadoEn(null, 'v-1', 1000), { idVisita: 'v-1', creadoEn: 1000 });
+  });
+
+  // Un reintento de la misma visita conserva la hora del primer toque.
+  test('un reintento de la misma visita no la cambia', () => {
+    const primera = fijarCreadoEn(null, 'v-1', 1000);
+    assert.equal(fijarCreadoEn(primera, 'v-1', 9000).creadoEn, 1000);
+  });
+
+  test('una visita nueva estrena la suya', () => {
+    const primera = fijarCreadoEn(null, 'v-1', 1000);
+    assert.deepEqual(fijarCreadoEn(primera, 'v-2', 9000), { idVisita: 'v-2', creadoEn: 9000 });
   });
 });

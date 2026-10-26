@@ -150,7 +150,8 @@ export function deLaCola(e: VisitaEncolada): VisitaHistorial {
     : [];
   return {
     id_visita: e.idVisita,
-    fecha: fechaComoBackend(e.creadoEn),
+    // La hora del toque de Guardar, la misma que llegará a la hoja.
+    fecha: fechaComoBackend(typeof p.creado_en === 'number' ? p.creado_en : e.creadoEn),
     id_local: e.resumen.idLocal || texto(p.id_local),
     comercio: e.resumen.comercio || texto(p.comercio),
     mall_puerta: texto(p.mall_puerta),

@@ -294,6 +294,27 @@ export function queHacerTrasEnvio(r: RespuestaEnvio): TrasEnvio {
   return 'error';
 }
 
+/** El momento en que el CAP tocó Guardar, atado a una visita. */
+export interface MomentoGuardado {
+  idVisita: string;
+  /** Milisegundos epoch. Viaja como creado_en. */
+  creadoEn: number;
+}
+
+/**
+ * La hora real de la visita es la del PRIMER toque de Guardar. Un
+ * reintento de la misma visita (mismo idVisita) conserva esa hora; una
+ * visita nueva estrena la suya. Sin esto, una visita guardada sin señal
+ * a las 13:47 quedaba en la hoja con la hora de envío.
+ */
+export function fijarCreadoEn(
+  actual: MomentoGuardado | null,
+  idVisita: string,
+  ahora = Date.now(),
+): MomentoGuardado {
+  return actual && actual.idVisita === idVisita ? actual : { idVisita, creadoEn: ahora };
+}
+
 /** True si el borrador tiene algo que valga la pena ofrecer. */
 export function borradorTieneAlgo(b: Partial<Borrador> | null): boolean {
   if (!b) return false;

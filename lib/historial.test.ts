@@ -135,6 +135,15 @@ describe('unir el historial con la cola', () => {
     assert.equal(r.enviadas.length, 1);
   });
 
+  // La pendiente muestra la hora en que se tocó Guardar, la misma que
+  // llegará a la hoja, no la de cuando entró en la cola.
+  test('la pendiente muestra la hora de creado_en', () => {
+    const e = enCola('v-9', new Date(2026, 9, 28, 14, 30).getTime());
+    e.payload = { ...e.payload, creado_en: new Date(2026, 9, 28, 13, 47).getTime() };
+    const r = unirConCola([], [e]);
+    assert.equal(r.pendientes[0].fecha, '28/10/2026 13:47');
+  });
+
   test('la cola más reciente primero', () => {
     const r = unirConCola([], [enCola('vieja', 1000), enCola('nueva', 2000)]);
     assert.deepEqual(r.pendientes.map((v) => v.id_visita), ['nueva', 'vieja']);

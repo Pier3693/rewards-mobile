@@ -51,6 +51,8 @@ import {
   componerObservacion,
   claveBorrador,
   nuevaIdVisita,
+  fijarCreadoEn,
+  type MomentoGuardado,
   queHacerTrasEnvio,
   type TrasEnvio,
   borradorTieneAlgo,
@@ -135,6 +137,8 @@ export default function VisitaPage() {
    * backend no podría reconocer el reenvío.
    */
   const [idVisita, setIdVisita] = useState(() => nuevaIdVisita());
+  /** Cuándo se tocó Guardar por primera vez en ESTA visita. */
+  const guardadoEn = useRef<MomentoGuardado | null>(null);
 
   const [comprimiendo, setComprimiendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -462,6 +466,11 @@ export default function VisitaPage() {
     setError('');
     setPuedeReintentar(false);
 
+    // La hora real: la del primer toque de Guardar. "Reintentar envío"
+    // conserva la misma, y la cola la reenvía tal cual en cada intento.
+    guardadoEn.current = fijarCreadoEn(guardadoEn.current, idVisita);
+    const creadoEn = guardadoEn.current.creadoEn;
+
     const peticion = {
       id_local: local.id_local,
       comercio: local.comercio,
@@ -482,6 +491,7 @@ export default function VisitaPage() {
       fotosBase64: fotos,
       id_asignacion: idAsignacion,
       id_visita: idVisita,
+      creado_en: creadoEn,
     };
 
     // Las fotos ya se controlan al elegirlas, así que esto no debería
@@ -498,7 +508,6 @@ export default function VisitaPage() {
     // la app a mitad del envío, o se va la señal, la visita y sus fotos
     // siguen ahí. El próximo intento de la cola se deja para después del
     // límite de este envío, para que no salgan dos a la vez.
-    const ahora = Date.now();
     const entrada = {
       ...nuevaEntrada(
         idVisita,
@@ -510,9 +519,9 @@ export default function VisitaPage() {
           idLocal: local.id_local,
         },
         getUsuario()?.correo || '',
-        ahora,
+        creadoEn,
       ),
-      proximoIntento: ahora + MS_LIMITE_GUARDADO + 30_000,
+      proximoIntento: Date.now() + MS_LIMITE_GUARDADO + 30_000,
     };
     let enCola = false;
     try {

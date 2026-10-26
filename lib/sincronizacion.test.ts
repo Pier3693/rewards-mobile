@@ -419,3 +419,28 @@ describe('tras el envío inmediato del formulario', () => {
     assert.equal(almacen.contenido.size, 0);
   });
 });
+
+// ══════════════════════════════════════════════════
+describe('hora real en los reintentos', () => {
+  // El caso real: guardada sin señal a las 13:47, enviada a las 13:48.
+  // La hoja tiene que decir 13:47: cada intento lleva el creado_en original.
+  test('cada reintento manda el creado_en original', async () => {
+    const GUARDADO = new Date(2026, 9, 28, 13, 47).getTime();
+    const almacen = almacenFalso([visita({ payload: { comercio: 'Tambo+', creado_en: GUARDADO } })]);
+
+    const enviados: unknown[] = [];
+    let intento = 0;
+    const enviar = async (p: Record<string, unknown>): Promise<ApiResponse<unknown>> => {
+      enviados.push(p.creado_en);
+      intento++;
+      return intento === 1 ? { ok: false, reintentable: true, error: 'Sin conexión' } : { ok: true };
+    };
+
+    await procesarCola({ almacen, correo: CORREO, enviar, ahora: GUARDADO + 60_000 });
+    const despues = almacen.contenido.get('v-1')!.proximoIntento;
+    await procesarCola({ almacen, correo: CORREO, enviar, ahora: despues + 10 * 60_000 });
+
+    assert.deepEqual(enviados, [GUARDADO, GUARDADO]);
+    assert.equal(almacen.contenido.size, 0);
+  });
+});
