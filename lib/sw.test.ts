@@ -11,11 +11,13 @@
 
 import { test, describe, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import vm from 'node:vm';
 
 import { GET } from '../app/sw.js/route.ts';
+import { listarRecursosEstaticos } from './sw/recursos.ts';
 
 const CODIGO = readFileSync(join(process.cwd(), 'lib', 'sw', 'sw.js'), 'utf8');
 const MS_LIMITE = 10_000;
@@ -56,7 +58,10 @@ const nunca = () => new Promise<never>(() => {});
 
 type Fetch = (url: string) => Promise<unknown>;
 
-function montarSw(fetchFalso: Fetch) {
+/**
+ * @param recursosApp la lista que pondría el build en RECURSOS_APP.
+ */
+function montarSw(fetchFalso: Fetch, recursosApp: string[] = []) {
   const oyentes = new Map<string, (e: unknown) => void>();
   const caches = new Map<string, Map<string, unknown>>();
   const pedidos: string[] = [];
@@ -100,7 +105,10 @@ function montarSw(fetchFalso: Fetch) {
     Headers,
     URL,
   });
-  vm.runInContext(CODIGO, contexto);
+  vm.runInContext(
+    CODIGO.replace('[] /* __RECURSOS_APP__ */', JSON.stringify(recursosApp)),
+    contexto,
+  );
 
   /** Lanza un evento y devuelve lo que se pasó a waitUntil, con su estado. */
   function lanzar(tipo: string, extra: Record<string, unknown> = {}) {
@@ -297,6 +305,8 @@ describe('lo que sirve /sw.js', () => {
     assert.doesNotThrow(() => new vm.Script(codigo));
     assert.equal(codigo.includes("'__VERSION__'"), false);
     assert.match(codigo, /const VERSION = "[^"]+";/);
+    assert.match(codigo, /const RECURSOS_APP = \[[^\]]*\];/);
+    assert.equal(codigo.includes('__RECURSOS_APP__'), false);
   });
 
   test('se sirve como JavaScript', () => {
@@ -366,5 +376,69 @@ describe('rutas de los chunks', () => {
     conRed = false;
     const r = (await sw.pedir(VISITA)) as RespuestaFalsa;
     assert.equal(await r.text(), 'codigo');
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('todos los chunks del build', () => {
+  const VISITA = '/_next/static/chunks/app/(app)/visita/%5Bid%5D/page-aea1.js';
+  const LOCAL = '/_next/static/chunks/app/(app)/local/%5Bid%5D/page-836d.js';
+
+  test('listarRecursosEstaticos recorre .next/static con las claves del navegador', () => {
+    const raiz = mkdtempSync(join(tmpdir(), 'rw-static-'));
+    try {
+      const archivo = (rel: string) => {
+        const completo = join(raiz, ...rel.split('/'));
+        mkdirSync(join(completo, '..'), { recursive: true });
+        writeFileSync(completo, 'x');
+      };
+      archivo('chunks/app/(app)/visita/[id]/page-aea1.js');
+      archivo('chunks/app/(app)/hoy/page-42f2.js');
+      archivo('chunks/646.f342.js'); // los que se cargan bajo demanda también
+      archivo('css/4c61.css');
+      archivo('chunks/pages/_app-1.js'); // router de páginas: fuera
+      archivo('t8QJ/_buildManifest.js'); // fuera de chunks/css/media
+
+      assert.deepEqual(listarRecursosEstaticos(raiz), [
+        '/_next/static/chunks/646.f342.js',
+        '/_next/static/chunks/app/(app)/hoy/page-42f2.js',
+        '/_next/static/chunks/app/(app)/visita/%5Bid%5D/page-aea1.js',
+        '/_next/static/css/4c61.css',
+      ]);
+    } finally {
+      rmSync(raiz, { recursive: true, force: true });
+    }
+  });
+
+  test('sin .next/static devuelve una lista vacía', () => {
+    assert.deepEqual(listarRecursosEstaticos(join(tmpdir(), 'no-existe-rw')), []);
+  });
+
+  // Punto 5: el registro abre sin señal aunque el CAP nunca haya entrado
+  // a esa pantalla con señal. El HTML de la parada NO nombra el chunk:
+  // tiene que venir de la lista del build.
+  test('el registro abre sin señal sin haberlo visitado antes', async () => {
+    let conRed = true;
+    const sw = montarSw(async (url) => {
+      if (!conRed) throw new TypeError('Failed to fetch');
+      if (url === '/visita/PC-1') return respuesta('<html>registro</html>');
+      return respuesta(`contenido de ${url}`);
+    }, [VISITA, LOCAL]);
+
+    // Con señal: lo que pasa al abrir Hoy, sin tocar ninguna parada.
+    const base = sw.lanzar('message', { data: { tipo: 'PRECALENTAR_BASE' } });
+    const paradas = sw.lanzar('message', { data: { tipo: 'precalentar', rutas: ['/visita/PC-1'] } });
+    await soltar(100);
+    assert.equal(base.terminada && paradas.terminada, true);
+
+    // Sin señal: la página y su chunk salen de la caché.
+    conRed = false;
+    const pagina = (await sw.pedir('/visita/PC-1', 'navigate')) as RespuestaFalsa;
+    assert.match(await pagina.text(), /registro/);
+
+    const chunk = (await sw.pedir(VISITA)) as RespuestaFalsa;
+    assert.equal(await chunk.text(), `contenido de ${VISITA}`);
+    const chunkLocal = (await sw.pedir(LOCAL)) as RespuestaFalsa;
+    assert.equal(await chunkLocal.text(), `contenido de ${LOCAL}`);
   });
 });
