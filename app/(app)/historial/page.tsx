@@ -94,7 +94,7 @@ export default function HistorialPage() {
   const filtroVacio = !sinNada && pendientesFiltradas.length === 0 && grupos.length === 0;
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-5 safe-t">
+    <main className="mx-auto max-w-md px-5 pt-pantalla">
       <header className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-[22px] font-bold">Historial</h1>
         <button

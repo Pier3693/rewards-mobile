@@ -2,7 +2,7 @@
 
 export default function OfflinePage() {
   return (
-    <main className="grid min-h-dvh place-items-center bg-surface px-8 text-center safe-t safe-b">
+    <main className="grid min-h-dvh place-items-center bg-surface px-8 text-center py-seguro">
       <div>
         <span className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-primary-light text-primary">
           <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

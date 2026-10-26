@@ -160,7 +160,7 @@ export default function LocalPage() {
 
   if (error || !local) {
     return (
-      <main className="mx-auto max-w-md px-5 pt-5 safe-t">
+      <main className="mx-auto max-w-md px-5 pt-pantalla">
         <Cabecera onVolver={() => router.back()} />
         <ErrorDeCarga detalle={error} onReintentar={cargar} onVolver={() => router.back()} />
       </main>
@@ -189,7 +189,7 @@ export default function LocalPage() {
   ].filter((f) => String(f.valor || '').trim());
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-5 pb-barra safe-t">
+    <main className="mx-auto max-w-md px-5 pb-barra pt-seguro">
       <Cabecera onVolver={() => router.back()} />
 
       {copiaDeLas > 0 && (
@@ -347,7 +347,7 @@ export default function LocalPage() {
       )}
 
       {/* ── Botón fijo ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 barra-ios px-5 py-3 safe-b-min">
+      <div className="fixed inset-x-0 bottom-0 z-30 barra-ios px-5 pt-3 pb-barra-fija">
         <button
           onClick={() => iniciarRegistro()}
           className="btn-grad mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"
@@ -365,7 +365,8 @@ export default function LocalPage() {
 // ══════════════════════════════════════════════════
 function Cabecera({ onVolver }: { onVolver: () => void }) {
   return (
-    <header className="flex items-center gap-2">
+    // Fijo arriba, bajo la hora: al hacer scroll el contenido pasa por debajo.
+    <header className="encabezado-fijo -mx-5 flex items-center gap-2 px-5 py-1.5">
       <button
         onClick={onVolver}
         aria-label="Volver"
@@ -528,7 +529,7 @@ function BloqueAsignacion({
 
 function Esqueleto() {
   return (
-    <main className="mx-auto max-w-md animate-pulse px-5 pt-5 safe-t">
+    <main className="mx-auto max-w-md animate-pulse px-5 pt-pantalla">
       <div className="h-11 w-11 rounded-full bg-line" />
       <div className="mx-auto mt-4 h-16 w-16 rounded-2xl bg-line" />
       <div className="mx-auto mt-3 h-6 w-48 rounded bg-line" />

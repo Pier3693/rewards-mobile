@@ -68,7 +68,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-dvh flex flex-col justify-center bg-surface px-7 safe-t safe-b">
+    <main className="min-h-dvh flex flex-col justify-center bg-surface px-7 py-seguro">
       {/* Marca */}
       <div className="mb-9 text-center">
         {/* logo-marca: en oscuro lleva un círculo blanco detrás, o el

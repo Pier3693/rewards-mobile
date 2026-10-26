@@ -602,7 +602,7 @@ export default function VisitaPage() {
 
   if (errorCarga || !local) {
     return (
-      <main className="mx-auto max-w-md px-5 pt-5 safe-t">
+      <main className="mx-auto max-w-md px-5 pt-pantalla">
         <ErrorDeCarga
           detalle={errorCarga}
           onReintentar={cargar}
@@ -630,8 +630,9 @@ export default function VisitaPage() {
     .join(' · ');
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-4 pb-barra safe-t">
-      {/* ── Cabecera ── */}
+    <main className="mx-auto max-w-md px-5 pb-barra pt-seguro">
+      {/* ── Cabecera y progreso: fijos arriba, bajo la hora ── */}
+      <div className="encabezado-fijo -mx-5 px-5 pb-2.5 pt-2">
       <header className="flex items-center gap-2">
         <button
           onClick={salir}
@@ -670,6 +671,7 @@ export default function VisitaPage() {
             {i + 1} · {nombre}
           </span>
         ))}
+      </div>
       </div>
 
       {!enLinea && (
@@ -780,7 +782,7 @@ export default function VisitaPage() {
       )}
 
       {/* ── Botones ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 barra-ios px-5 py-3 safe-b-min">
+      <div className="fixed inset-x-0 bottom-0 z-30 barra-ios px-5 pt-3 pb-barra-fija">
         <div className="mx-auto flex max-w-md gap-2">
           {paso > 1 && (
             <button
@@ -1348,7 +1350,7 @@ function Confirmacion({
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 pb-6 pt-10 text-center safe-t safe-b-min">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-5 text-center py-seguro">
       <span
         className={`mx-auto grid h-24 w-24 place-items-center rounded-full ${
           enCola ? 'bg-warn-light text-warn' : 'bg-ok-light text-ok'
@@ -1441,7 +1443,7 @@ function Confirmacion({
 
 function Esqueleto() {
   return (
-    <main className="mx-auto max-w-md animate-pulse px-5 pt-4 safe-t">
+    <main className="mx-auto max-w-md animate-pulse px-5 pt-pantalla">
       <div className="h-11 w-full rounded bg-line/60" />
       <div className="mt-3 h-1.5 w-full rounded-full bg-line" />
       <div className="mt-4 h-[66px] rounded-2xl bg-line/70" />

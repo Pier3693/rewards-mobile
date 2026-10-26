@@ -70,7 +70,7 @@ export default function InstallPrompt() {
   }
 
   return (
-    <div className="card fixed inset-x-4 bottom-6 z-50 mx-auto max-w-md p-4 shadow-xl safe-b">
+    <div className="card abajo-seguro fixed inset-x-4 z-50 mx-auto max-w-md p-4 shadow-xl">
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-light text-xl">
           📲

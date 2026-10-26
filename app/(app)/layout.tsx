@@ -30,7 +30,7 @@ export default function AppLayout({
   }
 
   return (
-    <div className={`min-h-dvh ${hayBarraInferior(pathname) ? 'pb-24' : ''}`}>
+    <div className={`min-h-dvh ${hayBarraInferior(pathname) ? 'pb-pantalla' : ''}`}>
       {children}
       <TabBar />
       {/* Envía las visitas que quedaron en el celular. */}

@@ -31,7 +31,7 @@ export default function RegistrarPage() {
   ];
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-5 safe-t">
+    <main className="mx-auto max-w-md px-5 pt-pantalla">
       <header className="mb-5 flex items-center gap-3">
         <span className="grid h-11 w-11 place-items-center rounded-full bg-primary text-sm font-bold text-white">
           {iniciales}

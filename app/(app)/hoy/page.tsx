@@ -236,7 +236,7 @@ export default function HoyPage() {
     .toUpperCase();
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-5 safe-t">
+    <main className="mx-auto max-w-md px-5 pt-pantalla">
       {/* ── Saludo ── */}
       <header className="mb-5 flex items-center gap-3">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-white">

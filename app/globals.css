@@ -46,6 +46,9 @@
   --color-barra: rgba(255, 255, 255, 0.85);
   /* Texto o ícono sobre un relleno de status (verde, rojo, ámbar, gris). */
   --color-sobre-estado: #ffffff;
+  /* Franja detrás de la hora del iPhone (ver .franja-estado): la hora va
+     siempre en blanco, así que en claro es el morado de marca. */
+  --color-franja: #3d35c8;
 
   /* Los mismos colores cuando son TEXTO sobre un fondo. En claro son
      iguales al color fuerte; en oscuro se aclaran para leerse, sin tocar
@@ -92,6 +95,7 @@ html {
   --color-ink-3: rgba(235, 235, 245, 0.3);
   --color-barra: rgba(28, 28, 30, 0.78);
   --color-sobre-estado: #000000;
+  --color-franja: rgba(0, 0, 0, 0.8);
 
   /* Status */
   --color-ok: #30d158;
@@ -171,25 +175,76 @@ body {
   overscroll-behavior-y: none;
 }
 
-.safe-b {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-.safe-t {
-  padding-top: env(safe-area-inset-top);
-}
+/* ══ Zonas seguras ══
+   La notch, la Dynamic Island, la hora y el indicador de inicio.
 
-/* Como .safe-b, pero con un suelo. Estas clases van fuera de capa, así
-   que SUSTITUYEN al padding de Tailwind en vez de sumarse: sin ese
-   max(), donde el navegador no informa safe-area el relleno queda en 0
-   y el botón se pega al borde. */
-.safe-b-min {
-  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-}
+   Estas clases van fuera de capa, así que SUSTITUYEN cualquier padding
+   de Tailwind del mismo lado. Por eso cada una lleva su propio relleno
+   base y le SUMA env(): nunca env() a secas, o en el navegador (donde
+   vale 0) el contenido queda pegado al borde. lib/tema.test.ts lo vigila. */
 
-/* Hueco para la barra de acción fija de las pantallas secundarias:
-   el botón y su relleno, más el margen inferior del iPhone. */
+/* Pantallas con barra de abajo: el contenido empieza bajo la hora. */
+.pt-pantalla {
+  padding-top: calc(1.25rem + env(safe-area-inset-top));
+}
+/* Pantallas con encabezado fijo: el encabezado pone su propio aire. */
+.pt-seguro {
+  padding-top: calc(0px + env(safe-area-inset-top));
+}
+/* Pantallas centradas (entrada, sin conexión, error, confirmación). */
+.py-seguro {
+  padding-top: calc(1.5rem + env(safe-area-inset-top));
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+/* Hueco para que la barra de abajo no tape lo último de la pantalla. */
+.pb-pantalla {
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+}
+/* La barra de abajo: sus etiquetas por encima del indicador de inicio. */
+.pb-tabbar {
+  padding-bottom: calc(0.25rem + env(safe-area-inset-bottom));
+}
+/* Barras de acción fijas (Detalle, Registro). */
+.pb-barra-fija {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+/* Hueco para la barra de acción fija: el botón y su relleno. */
 .pb-barra {
   padding-bottom: calc(7.5rem + env(safe-area-inset-bottom));
+}
+/* Avisos flotantes. */
+.arriba-seguro {
+  top: calc(1rem + env(safe-area-inset-top));
+}
+.abajo-seguro {
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+/* Franja detrás de la hora del iPhone. Con la barra de estado
+   'black-translucent' la app ocupa toda la pantalla y la hora va en
+   blanco: la franja le da fondo, y el contenido pasa por debajo al hacer
+   scroll, nunca detrás de la hora. En Android y en el navegador mide 0. */
+.franja-estado {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: calc(0px + env(safe-area-inset-top));
+  background: var(--color-franja);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* Encabezado que se queda arriba al hacer scroll, justo bajo la hora,
+   translúcido como los de iOS. */
+.encabezado-fijo {
+  position: sticky;
+  top: calc(0px + env(safe-area-inset-top));
+  z-index: 20;
+  background: var(--color-barra);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--color-line);
 }
 
 /* Botón principal con gradiente del mockup */

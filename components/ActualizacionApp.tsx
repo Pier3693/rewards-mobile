@@ -106,7 +106,7 @@ export default function ActualizacionApp() {
   if (!esperando || pathname?.startsWith('/visita/')) return null;
 
   return (
-    <div className="fixed inset-x-4 top-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-surface shadow-xl safe-t">
+    <div className="arriba-seguro fixed inset-x-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-surface shadow-xl">
       <p className="min-w-0 flex-1 text-[13px] font-semibold">Hay una nueva versión</p>
       <button
         onClick={actualizar}

@@ -169,7 +169,7 @@ export default function PerfilPage() {
   const urlCorreo = `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent('Ayuda con Rewards Mobile')}`;
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-6 safe-t">
+    <main className="mx-auto max-w-md px-5 pt-pantalla">
       <h1 className="mb-6 text-center text-[17px] font-bold">Mi perfil</h1>
 
       {/* ── Quién ── */}

@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import vm from 'node:vm';
 
@@ -11,6 +11,20 @@ import { contraste, AA } from './contraste.ts';
 //  Contraste: se lee de app/globals.css, así la prueba
 //  vigila los colores de verdad y no una copia.
 // ══════════════════════════════════════════════════
+
+/** Todos los .tsx de esas carpetas. */
+function listarTsx(carpetas: string[]): string[] {
+  const salida: string[] = [];
+  const recorrer = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const ruta = join(dir, e.name);
+      if (e.isDirectory()) recorrer(ruta);
+      else if (e.name.endsWith('.tsx')) salida.push(ruta);
+    }
+  };
+  carpetas.forEach((c) => recorrer(join(process.cwd(), c)));
+  return salida;
+}
 
 const CSS = readFileSync(join(process.cwd(), 'app', 'globals.css'), 'utf8');
 
@@ -145,6 +159,30 @@ describe('contraste AA en modo oscuro', () => {
   test('el aviso invertido (fondo ink, texto surface) se lee', () => {
     exigirAA('ink', 'surface');
     exigirAA('ink', 'surface', 'surface', CLARO);
+  });
+});
+
+describe('zonas seguras', () => {
+  // El fallo que se corrige: .safe-t y compañía iban fuera de capa y
+  // REEMPLAZABAN el padding de Tailwind. En el navegador, donde env() vale
+  // 0, el contenido quedaba pegado al borde. Ahora env() siempre se suma.
+  test('env() nunca va a secas: siempre dentro de un calc() que suma', () => {
+    const lineas = CSS.split('\n').filter((l) => /env\(safe-area/.test(l) && !/^\s*(\/\*|\*)/.test(l));
+    assert.ok(lineas.length > 0);
+    for (const l of lineas) assert.match(l, /calc\(/, l.trim());
+  });
+
+  test('ya no quedan las clases viejas en las pantallas', () => {
+    const viejas = /\bsafe-(t|b|b-min)\b/;
+    for (const archivo of listarTsx(['app', 'components'])) {
+      const texto = readFileSync(archivo, 'utf8').replace(/\/\/.*$/gm, '');
+      assert.doesNotMatch(texto, viejas, archivo);
+    }
+  });
+
+  // Con 'black-translucent' la hora del iPhone va siempre en blanco.
+  test('la hora blanca se lee sobre la franja, en claro', () => {
+    exigirAA('franja', '#ffffff', 'surface', CLARO);
   });
 });
 

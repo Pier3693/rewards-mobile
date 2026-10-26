@@ -7,7 +7,7 @@ export default function BuscarPage() {
   const router = useRouter();
 
   return (
-    <main className="mx-auto max-w-md px-5 pt-5 safe-t">
+    <main className="mx-auto max-w-md px-5 pt-pantalla">
       <h1 className="mb-4 text-[22px] font-bold">Buscar comercio</h1>
 
       <BuscadorComercios
