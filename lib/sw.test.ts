@@ -318,6 +318,26 @@ describe('guardar las pantallas después de activarse', () => {
 });
 
 // ══════════════════════════════════════════════════
+describe('la versión', () => {
+  // Perfil la muestra: el service worker contesta por el canal del mensaje.
+  test('contesta su versión por el canal del mensaje', async () => {
+    const sw = montarSw(async () => respuesta(), [], { version: 'abc123' });
+    const recibidos: unknown[] = [];
+    sw.lanzar('message', {
+      data: { tipo: 'VERSION' },
+      ports: [{ postMessage: (m: unknown) => recibidos.push(m) }],
+    });
+    await soltar();
+    assert.equal(recibidos.length, 1);
+    assert.equal((recibidos[0] as { version: string }).version, 'abc123');
+  });
+
+  test('sin canal no revienta', async () => {
+    const sw = montarSw(async () => respuesta());
+    assert.doesNotThrow(() => sw.lanzar('message', { data: { tipo: 'VERSION' } }));
+  });
+});
+
 describe('lo que sirve /sw.js', () => {
   test('es JavaScript válido y lleva la versión puesta', async () => {
     const codigo = await GET().text();

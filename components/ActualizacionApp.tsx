@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { precalentarBase, olvidarPrecalentado, esperarActivado } from '@/lib/precalentar';
+import { EVENTO_VERSION_NUEVA } from '@/lib/version';
 
 /**
  * Si la activación no termina, se recarga igual pasado este tiempo. La
@@ -64,8 +65,22 @@ export default function ActualizacionApp() {
       if (document.visibilityState === 'visible') registro?.update().catch(() => {});
     };
 
+    // "Buscar actualización" de Perfil encontró una: se enseña el aviso.
+    const alHaberNueva = () => {
+      navigator.serviceWorker
+        .getRegistration()
+        .then((reg) => {
+          if (reg?.waiting && navigator.serviceWorker.controller) setEsperando(reg.waiting);
+        })
+        .catch(() => {});
+    };
+
     document.addEventListener('visibilitychange', alVolver);
-    return () => document.removeEventListener('visibilitychange', alVolver);
+    window.addEventListener(EVENTO_VERSION_NUEVA, alHaberNueva);
+    return () => {
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener(EVENTO_VERSION_NUEVA, alHaberNueva);
+    };
   }, []);
 
   function recargar() {
