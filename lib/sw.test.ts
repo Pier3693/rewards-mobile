@@ -60,10 +60,19 @@ type Fetch = (url: string) => Promise<unknown>;
 
 /**
  * @param recursosApp la lista que pondría el build en RECURSOS_APP.
+ * @param opciones.version la VERSION que pondría el build.
+ * @param opciones.caches compartirlas entre dos montajes simula una
+ *   actualización: la versión nueva encuentra lo que dejó la vieja.
  */
-function montarSw(fetchFalso: Fetch, recursosApp: string[] = []) {
+function montarSw(
+  fetchFalso: Fetch,
+  recursosApp: string[] = [],
+  {
+    version = '__VERSION__',
+    caches = new Map<string, Map<string, unknown>>(),
+  }: { version?: string; caches?: Map<string, Map<string, unknown>> } = {},
+) {
   const oyentes = new Map<string, (e: unknown) => void>();
-  const caches = new Map<string, Map<string, unknown>>();
   const pedidos: string[] = [];
   let reclamado = false;
 
@@ -77,6 +86,7 @@ function montarSw(fetchFalso: Fetch, recursosApp: string[] = []) {
       return {
         match: async (k: string | { url: string }) => c.get(clave(k)),
         put: async (k: string | { url: string }, v: unknown) => void c.set(clave(k), v),
+        keys: async () => [...c.keys()].map((k) => ({ url: `http://localhost${k}` })),
       };
     },
     keys: async () => [...caches.keys()],
@@ -106,7 +116,10 @@ function montarSw(fetchFalso: Fetch, recursosApp: string[] = []) {
     URL,
   });
   vm.runInContext(
-    CODIGO.replace('[] /* __RECURSOS_APP__ */', JSON.stringify(recursosApp)),
+    CODIGO.replace("'__VERSION__'", JSON.stringify(version)).replace(
+      '[] /* __RECURSOS_APP__ */',
+      JSON.stringify(recursosApp),
+    ),
     contexto,
   );
 
@@ -139,6 +152,8 @@ function montarSw(fetchFalso: Fetch, recursosApp: string[] = []) {
     lanzar,
     pedir,
     caches,
+    /** La caché de esta versión. */
+    cache: () => caches.get(`rewards-${version}`)!,
     pedidos,
     reclamado: () => reclamado,
     /** Las funciones del script, para probarlas sueltas. */
@@ -197,7 +212,7 @@ describe('instalación', () => {
     await soltar();
 
     assert.deepEqual([...sw.pedidos].sort(), [...CRITICOS].sort());
-    const cache = [...sw.caches.values()][0];
+    const cache = sw.cache();
     assert.deepEqual([...cache.keys()].sort(), [...CRITICOS].sort());
   });
 
@@ -211,7 +226,7 @@ describe('instalación', () => {
 
     assert.equal(install.terminada, true);
     assert.match(String((install.error as Error)?.message), /\/offline/);
-    const cache = [...sw.caches.values()][0];
+    const cache = sw.cache();
     assert.equal(cache.has('/offline'), false);
   });
 
@@ -264,7 +279,7 @@ describe('guardar las pantallas después de activarse', () => {
     await soltar();
 
     assert.equal(tarea.terminada, true);
-    const cache = [...sw.caches.values()][0];
+    const cache = sw.cache();
     assert.ok(cache.has('/hoy'));
     assert.ok(cache.has('/_next/static/chunks/app-1.js'));
     assert.ok(cache.has('/_next/static/css/a.css'));
@@ -440,5 +455,117 @@ describe('todos los chunks del build', () => {
     assert.equal(await chunk.text(), `contenido de ${VISITA}`);
     const chunkLocal = (await sw.pedir(LOCAL)) as RespuestaFalsa;
     assert.equal(await chunkLocal.text(), `contenido de ${LOCAL}`);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('actualizar sin perder lo guardado', () => {
+  const CHUNK = {
+    A: '/_next/static/chunks/app/(app)/local/%5Bid%5D/page-aaaa.js',
+    B: '/_next/static/chunks/app/(app)/local/%5Bid%5D/page-bbbb.js',
+  };
+  const PARADAS = ['/local/PC-0737', '/visita/PC-0737'];
+
+  /** Un servidor que sirve la versión que toque, o nada si no hay señal. */
+  function servidor() {
+    const estado = { version: 'A' as 'A' | 'B', conRed: true, colgado: false };
+    const fetch = async (url: string) => {
+      if (estado.colgado) return nunca();
+      if (!estado.conRed) throw new TypeError('Failed to fetch');
+      const v = estado.version;
+      if (url.startsWith('/_next/')) return respuesta(`codigo de ${url}`);
+      if (url.startsWith('/local/') || url.startsWith('/visita/') || url === '/hoy') {
+        return respuesta(`<html>pagina ${v}<script src="${CHUNK[v]}"></script></html>`);
+      }
+      return respuesta(`archivo ${v}`);
+    };
+    return { estado, fetch };
+  }
+
+  /** La versión A instalada, activa y con las paradas precalentadas. */
+  async function versionAConTodo() {
+    const caches = new Map<string, Map<string, unknown>>();
+    const srv = servidor();
+    const a = montarSw(srv.fetch, [CHUNK.A], { version: 'A', caches });
+    a.lanzar('install');
+    await soltar();
+    a.lanzar('activate');
+    await soltar(100);
+    a.lanzar('message', { data: { tipo: 'precalentar', rutas: PARADAS } });
+    await soltar(100);
+    assert.ok(a.cache().has('/local/PC-0737'), 'A tenía la parada guardada');
+    return { caches, srv };
+  }
+
+  async function textoDe(r: unknown) {
+    return (r as RespuestaFalsa).text();
+  }
+
+  // Tu punto 3: A con todo → se instala B → activate → sin señal.
+  test('con señal al activar, sin señal después abre todo con la versión B', async () => {
+    const { caches, srv } = await versionAConTodo();
+
+    srv.estado.version = 'B';
+    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    b.lanzar('install');
+    await soltar();
+    const activate = b.lanzar('activate');
+    await soltar(200);
+    assert.equal(activate.terminada, true);
+
+    srv.estado.conRed = false;
+    for (const ruta of ['/hoy', ...PARADAS]) {
+      assert.match(await textoDe(await b.pedir(ruta, 'navigate')), /pagina B/, ruta);
+    }
+    assert.equal(await textoDe(await b.pedir(CHUNK.B)), `codigo de ${CHUNK.B}`);
+    assert.equal(caches.has('rewards-A'), false, 'la caché de A ya se borró');
+  });
+
+  // Sin señal al activar: la copia de A sirve, con SUS chunks.
+  test('sin señal al activar, las páginas de A siguen abriendo con sus chunks', async () => {
+    const { caches, srv } = await versionAConTodo();
+
+    srv.estado.version = 'B';
+    srv.estado.conRed = false;
+    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    const activate = b.lanzar('activate');
+    await soltar(200);
+    assert.equal(activate.terminada, true);
+
+    assert.match(await textoDe(await b.pedir('/local/PC-0737', 'navigate')), /pagina A/);
+    assert.equal(await textoDe(await b.pedir(CHUNK.A)), `codigo de ${CHUNK.A}`);
+    assert.equal(caches.has('rewards-A'), false);
+  });
+
+  test('la caché vieja no se borra antes de terminar la copia', async () => {
+    const { caches, srv } = await versionAConTodo();
+
+    srv.estado.version = 'B';
+    srv.estado.colgado = true;
+    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    const activate = b.lanzar('activate');
+
+    await soltar(100);
+    assert.equal(activate.terminada, false, 'sigue guardando');
+    assert.equal(caches.has('rewards-A'), true, 'A sigue ahí mientras tanto');
+
+    // Cada descarga colgada se corta a los 10 s; el tope total es de 45 s.
+    for (let i = 0; i < 6 && !activate.terminada; i++) await avanzar(MS_LIMITE);
+    assert.equal(activate.terminada, true);
+    assert.equal(caches.has('rewards-A'), false);
+  });
+
+  // Sin que la página mande nada: el service worker se acuerda.
+  test('recuerda las paradas y las vuelve a pedir al activarse', async () => {
+    const { caches, srv } = await versionAConTodo();
+    assert.ok(caches.has('rw-meta'));
+
+    srv.estado.version = 'B';
+    const b = montarSw(srv.fetch, [CHUNK.B], { version: 'B', caches });
+    b.lanzar('activate');
+    await soltar(200);
+
+    for (const ruta of PARADAS) assert.ok(b.pedidos.includes(ruta), `pidió ${ruta}`);
+    assert.ok(caches.has('rw-meta'), 'la memoria sobrevive a la limpieza');
   });
 });
