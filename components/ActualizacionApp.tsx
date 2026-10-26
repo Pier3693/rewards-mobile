@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { precalentarBase, olvidarPrecalentado, esperarActivado } from '@/lib/precalentar';
 
-/** Si la activación no termina, se recarga igual pasado este tiempo. */
-const MS_MAXIMO_ACTUALIZAR = 60_000;
+/**
+ * Si la activación no termina, se recarga igual pasado este tiempo. La
+ * activación ya no descarga nada (solo copia lo guardado en el celular),
+ * así que normalmente llega en milisegundos.
+ */
+const MS_MAXIMO_ACTUALIZAR = 15_000;
 
 /**
  * Registra el service worker y avisa cuando hay una versión nueva.
@@ -13,7 +17,8 @@ const MS_MAXIMO_ACTUALIZAR = 60_000;
  * La versión nueva espera (sin skipWaiting a ciegas) hasta que el CAP
  * toca "Actualizar". Se recarga cuando termina de ACTIVARSE, no al
  * cambiar de controlador: mientras se activa está copiando lo guardado
- * para trabajar sin señal, y recargar antes la pillaría a medias.
+ * para trabajar sin señal, y recargar antes la pillaría a medias. Las
+ * descargas de la versión nueva siguen después, sin hacer esperar.
  * El aviso no sale en el registro de visita, porque recargar ahí haría
  * perder las fotos que todavía no están guardadas.
  */
