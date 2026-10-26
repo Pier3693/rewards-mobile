@@ -123,7 +123,7 @@ export default function HistorialPage() {
                 key={f.valor}
                 onClick={() => setFiltro(f.valor)}
                 className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition ${
-                  activo ? 'border-primary bg-primary text-white' : 'border-line bg-white text-ink-2'
+                  activo ? 'border-primary bg-primary text-white' : 'border-line bg-surface text-ink-2'
                 }`}
               >
                 {f.label}
@@ -320,7 +320,7 @@ function Detalle({
       {v.id_local && (
         <button
           onClick={() => onVerLocal(v.id_local)}
-          className="mt-6 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border border-line bg-white text-[14px] font-semibold text-ink active:scale-[0.98]"
+          className="mt-6 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border border-line bg-surface text-[14px] font-semibold text-ink active:scale-[0.98]"
         >
           <IconStore className="h-[18px] w-[18px]" /> Ver local
         </button>

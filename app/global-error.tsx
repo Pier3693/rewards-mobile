@@ -2,6 +2,8 @@
 
 import './globals.css';
 import PantallaError from '@/components/PantallaError';
+import TemaApp from '@/components/TemaApp';
+import { SCRIPT_TEMA } from '@/lib/tema';
 
 /**
  * Si falla el layout raíz, Next reemplaza toda la página: por eso lleva
@@ -15,9 +17,13 @@ export default function ErrorGlobal({
   reset: () => void;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body className="min-h-dvh antialiased">
         <PantallaError error={error} reset={reset} />
+        <TemaApp />
       </body>
     </html>
   );

@@ -771,7 +771,7 @@ export default function VisitaPage() {
       )}
 
       {/* ── Botones ── */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 px-5 py-3 backdrop-blur safe-b-min">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur safe-b-min">
         <div className="mx-auto flex max-w-md gap-2">
           {paso > 1 && (
             <button
@@ -902,7 +902,7 @@ function ElegirAsignacion({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40">
-      <div className="animate-sheet-up flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-white">
+      <div className="animate-sheet-up flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-surface">
         <div className="flex justify-center pt-2.5">
           <span className="h-1.5 w-10 rounded-full bg-line" />
         </div>
@@ -997,7 +997,7 @@ function Paso1({
               className={`flex min-h-[64px] items-center gap-2.5 rounded-2xl border p-3.5 text-left transition disabled:opacity-40 ${
                 activo
                   ? `border-current ${MOTIVO_CLS[m.valor]}`
-                  : 'border-line bg-white'
+                  : 'border-line bg-surface'
               }`}
             >
               <span className={activo ? '' : 'text-ink-2'}>
@@ -1019,7 +1019,7 @@ function Paso1({
               key={s}
               onClick={() => onStatus(s)}
               className={`flex min-h-[64px] items-center gap-2.5 rounded-2xl border p-3 text-left transition ${
-                activo ? STATUS_CLS[s].fuerte : 'border-line bg-white'
+                activo ? STATUS_CLS[s].fuerte : 'border-line bg-surface'
               }`}
             >
               {/* El color del resultado se ve antes de elegir, no solo al elegir. */}
@@ -1053,7 +1053,7 @@ function Paso1({
                 className={`flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition ${
                   tipoIncidencia === t
                     ? 'bg-err text-white'
-                    : 'border border-line bg-white text-ink-2'
+                    : 'border border-line bg-surface text-ink-2'
                 }`}
               >
                 {tipoIncidencia === t && <IconCheck className="h-3.5 w-3.5" />}
@@ -1122,7 +1122,7 @@ function Paso2({
                 placeholder={c.placeholder}
                 inputMode={c.modo}
                 aria-invalid={!!fallo}
-                className={`w-full rounded-xl border bg-white px-4 py-3 text-[15px] outline-none focus:ring-4 ${
+                className={`w-full rounded-xl border bg-surface px-4 py-3 text-[15px] outline-none focus:ring-4 ${
                   fallo
                     ? 'border-err focus:border-err focus:ring-err/10'
                     : 'border-line focus:border-primary focus:ring-primary/10'
@@ -1241,7 +1241,7 @@ function Paso3({
           <button
             onClick={() => galeriaRef.current?.click()}
             disabled={comprimiendo}
-            className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border border-line bg-white text-[14px] font-semibold text-ink active:scale-[0.98] disabled:opacity-60"
+            className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border border-line bg-surface text-[14px] font-semibold text-ink active:scale-[0.98] disabled:opacity-60"
           >
             <IconImage className="h-5 w-5" />
             Galería
@@ -1263,7 +1263,7 @@ function Paso3({
             onChange={(e) => onObservacion(e.target.value)}
             placeholder="Describe lo que encontraste…"
             rows={4}
-            className={`w-full resize-none rounded-xl border border-line bg-white py-3 pl-4 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 ${
+            className={`w-full resize-none rounded-xl border border-line bg-surface py-3 pl-4 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 ${
               puedeDictar ? 'pr-16' : 'pr-4'
             }`}
           />

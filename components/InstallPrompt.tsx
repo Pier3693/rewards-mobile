@@ -91,25 +91,25 @@ export default function InstallPrompt() {
       : 'Accede más rápido desde tu pantalla de inicio';
 
   return (
-    <div className="fixed inset-x-4 bottom-24 z-50 mx-auto max-w-md rounded-2xl bg-ink px-4 py-3.5 text-white shadow-xl">
+    <div className="fixed inset-x-4 bottom-24 z-50 mx-auto max-w-md rounded-2xl bg-ink px-4 py-3.5 text-surface shadow-xl">
       <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/15">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface/15">
           📲
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold">Instalar como app</p>
-          <p className="mt-0.5 text-[11.5px] leading-snug text-white/75">
+          <p className="mt-0.5 text-[11.5px] leading-snug text-surface/75">
             {textoInstrucciones}
           </p>
         </div>
-        <button onClick={() => cerrar()} className="shrink-0 p-1 text-white/60">
+        <button onClick={() => cerrar()} className="shrink-0 p-1 text-surface/60">
           <IconX className="h-4 w-4" />
         </button>
       </div>
       {modo === 'auto' && (
         <button
           onClick={instalar}
-          className="mt-3 w-full rounded-xl bg-white py-2 text-[13px] font-semibold text-ink"
+          className="mt-3 w-full rounded-xl bg-surface py-2 text-[13px] font-semibold text-ink"
         >
           Instalar
         </button>

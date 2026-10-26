@@ -91,12 +91,12 @@ export default function ActualizacionApp() {
   if (!esperando || pathname?.startsWith('/visita/')) return null;
 
   return (
-    <div className="fixed inset-x-4 top-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-xl safe-t">
+    <div className="fixed inset-x-4 top-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-surface shadow-xl safe-t">
       <p className="min-w-0 flex-1 text-[13px] font-semibold">Hay una nueva versión</p>
       <button
         onClick={actualizar}
         disabled={actualizando}
-        className="min-h-11 shrink-0 rounded-xl bg-white px-4 text-[13px] font-semibold text-ink disabled:opacity-70"
+        className="min-h-11 shrink-0 rounded-xl bg-surface px-4 text-[13px] font-semibold text-ink disabled:opacity-70"
       >
         {actualizando ? 'Actualizando…' : 'Actualizar'}
       </button>

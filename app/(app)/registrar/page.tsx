@@ -51,7 +51,7 @@ export default function RegistrarPage() {
             className={`flex min-h-[60px] items-center justify-center gap-2 rounded-2xl border transition ${
               que === o.valor
                 ? 'border-2 border-primary bg-primary-light text-primary'
-                : 'border-line bg-white text-ink-2'
+                : 'border-line bg-surface text-ink-2'
             }`}
           >
             {o.icono}

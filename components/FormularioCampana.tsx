@@ -117,7 +117,7 @@ export function FormularioCampana({
           <select
             value={trade}
             onChange={(e) => setTrade(e.target.value)}
-            className="w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
           >
             <option value="">Seleccionar persona...</option>
             {trades.map((t) => (
@@ -159,7 +159,7 @@ export function FormularioCampana({
             value={material}
             onChange={(e) => setMaterial(e.target.value)}
             placeholder="Ej: Acrílico, Banner, Díptico..."
-            className="w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
         </div>
 
@@ -173,7 +173,7 @@ export function FormularioCampana({
             onChange={(e) => setObservacion(e.target.value)}
             placeholder="Describe la campaña ejecutada..."
             rows={3}
-            className="w-full resize-none rounded-xl border border-line bg-white px-4 py-3 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="w-full resize-none rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
         </div>
 

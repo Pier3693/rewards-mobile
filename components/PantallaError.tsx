@@ -29,7 +29,7 @@ export default function PantallaError({
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-white px-8 text-center safe-t safe-b">
+    <main className="grid min-h-dvh place-items-center bg-surface px-8 text-center safe-t safe-b">
       <div className="max-w-sm">
         <span className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-warn-light text-warn">
           <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

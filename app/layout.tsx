@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import InstallPrompt from '@/components/InstallPrompt';
 import ActualizacionApp from '@/components/ActualizacionApp';
+import TemaApp from '@/components/TemaApp';
+import { SCRIPT_TEMA } from '@/lib/tema';
 
 export const metadata: Metadata = {
   title: 'Rewards · Trade Marketing',
@@ -28,11 +30,18 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es">
+    // suppressHydrationWarning: el script del <head> pone data-theme en
+    // <html> antes de que React lo vea, y eso no es un error.
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        {/* Antes de pintar: sin esto, en oscuro se vería un destello blanco. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body className="min-h-dvh antialiased">
         {children}
         <InstallPrompt />
         <ActualizacionApp />
+        <TemaApp />
       </body>
     </html>
   );

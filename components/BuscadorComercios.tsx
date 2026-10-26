@@ -149,7 +149,7 @@ export default function BuscadorComercios({
           placeholder="Nombre, dirección o distrito"
           autoComplete="off"
           autoCapitalize="none"
-          className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+          className="w-full rounded-2xl border border-line bg-surface py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
           autoFocus={autoFocus}
         />
         {query && (
@@ -173,7 +173,7 @@ export default function BuscadorComercios({
             onClick={() => cambiarFiltro(f.valor)}
             className={`min-h-11 flex-1 rounded-xl text-[13px] font-semibold transition ${
               tipo === f.valor
-                ? 'bg-white text-primary shadow-sm'
+                ? 'bg-surface text-primary shadow-sm'
                 : 'text-ink-2'
             }`}
           >
@@ -394,7 +394,7 @@ function SinBuscar({
           <button
             key={t}
             onClick={() => onElegir(t)}
-            className="flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-white px-3.5 text-[13px] font-medium active:scale-[0.98]"
+            className="flex min-h-11 items-center gap-1.5 rounded-full border border-line bg-surface px-3.5 text-[13px] font-medium active:scale-[0.98]"
           >
             <IconClock className="h-3.5 w-3.5 text-ink-2" />
             {t}

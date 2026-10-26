@@ -68,10 +68,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-dvh flex flex-col justify-center bg-white px-7 safe-t safe-b">
+    <main className="min-h-dvh flex flex-col justify-center bg-surface px-7 safe-t safe-b">
       {/* Marca */}
       <div className="mb-9 text-center">
-        <div className="mx-auto mb-5 w-fit">
+        {/* logo-marca: en oscuro lleva un círculo blanco detrás, o el
+            morado del logo apenas se vería sobre el fondo oscuro. */}
+        <div className="logo-marca mx-auto mb-5 w-fit">
           <Image
             src="/logo-login.png"
             alt="Rewards Marketing Relacional"
@@ -117,7 +119,7 @@ export default function LoginPage() {
             autoCapitalize="none"
             autoCorrect="off"
             autoComplete="username"
-            className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-4 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="w-full rounded-2xl border border-line bg-surface py-3.5 pl-11 pr-4 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
             placeholder="Usuario"
           />
         </div>
@@ -139,7 +141,7 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
-            className="w-full rounded-2xl border border-line bg-white py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+            className="w-full rounded-2xl border border-line bg-surface py-3.5 pl-11 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
             placeholder="Contraseña"
           />
           <button
