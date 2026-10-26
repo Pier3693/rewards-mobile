@@ -81,11 +81,18 @@ function montarSw(
       if (!caches.has(nombre)) caches.set(nombre, new Map());
       const c = caches.get(nombre)!;
       // Como la Cache API: una petición se busca por su URL, sin el origen.
-      const clave = (k: string | { url: string }) =>
-        typeof k === 'string' ? k : new URL(k.url).pathname;
+      const clave = (k: string | { url: string }) => {
+        const u = typeof k === 'string' ? k : k.url;
+        return u.startsWith('http') ? new URL(u).pathname : u;
+      };
       return {
         match: async (k: string | { url: string }) => c.get(clave(k)),
-        put: async (k: string | { url: string }, v: unknown) => void c.set(clave(k), v),
+        // Como la Cache API: volver a guardar algo lo pone al final.
+        put: async (k: string | { url: string }, v: unknown) => {
+          c.delete(clave(k));
+          c.set(clave(k), v);
+        },
+        delete: async (k: string | { url: string }) => c.delete(clave(k)),
         keys: async () => [...c.keys()].map((k) => ({ url: `http://localhost${k}` })),
       };
     },
@@ -144,8 +151,9 @@ function montarSw(
   /** Una petición del navegador: devuelve lo que respondió el service worker. */
   async function pedir(url: string, mode = 'no-cors') {
     let respuesta: Promise<unknown> | undefined;
+    const completa = url.startsWith('http') ? url : `http://localhost${url}`;
     oyentes.get('fetch')!({
-      request: { method: 'GET', url: `http://localhost${url}`, mode, headers: new Headers() },
+      request: { method: 'GET', url: completa, mode, headers: new Headers() },
       respondWith: (r: Promise<unknown>) => (respuesta = r),
       waitUntil: () => void mantenidoVivo++,
     });
@@ -620,5 +628,98 @@ describe('actualizar sin perder lo guardado', () => {
 
     for (const ruta of PARADAS) assert.ok(b.pedidos.includes(ruta), `pidió ${ruta}`);
     assert.ok(caches.has('rw-meta'), 'la memoria sobrevive a la limpieza');
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('mosaicos del mapa', () => {
+  const MOSAICO = 'https://tile.openstreetmap.org/15/9372/17000.png';
+  const mosaicoN = (n: number) => `https://tile.openstreetmap.org/15/${n}/17000.png`;
+  const DIA = 24 * 60 * 60 * 1000;
+
+  function png(campos: Partial<RespuestaFalsa & { blob: () => Promise<Blob> }> = {}) {
+    return {
+      ...respuesta('png', { type: 'cors', headers: new Headers({ 'content-type': 'image/png' }) }),
+      blob: async () => new Blob(['png']),
+      ...campos,
+    };
+  }
+
+  const mosaicos = (sw: ReturnType<typeof montarSw>) => sw.caches.get('rw-mosaicos') ?? new Map();
+
+  test('se guarda el ya visto y sin señal sale de la copia', async () => {
+    const estado = { conRed: true };
+    const sw = montarSw(async () => {
+      if (!estado.conRed) throw new TypeError('Failed to fetch');
+      return png();
+    });
+    const primera = (await sw.pedir(MOSAICO, 'cors')) as Response;
+    assert.equal(primera.status, 200);
+    await soltar();
+    assert.equal(mosaicos(sw).size, 1);
+
+    estado.conRed = false;
+    const sinRed = (await sw.pedir(MOSAICO, 'cors')) as Response;
+    assert.equal(sinRed.status, 200);
+    assert.equal(await sinRed.text(), 'png');
+    assert.equal(sw.pedidos.length, 1, 'la copia fresca no vuelve a pedirlo');
+  });
+
+  test('con más de 300 se borran los más antiguos', async () => {
+    const sw = montarSw(async () => png());
+    for (let n = 0; n < 305; n++) {
+      await sw.pedir(mosaicoN(n), 'cors');
+      await soltar(5);
+    }
+    await soltar();
+    const claves = [...mosaicos(sw).keys()];
+    assert.equal(claves.length, 300);
+    assert.ok(!claves.includes('/15/0/17000.png'), 'el primero se fue');
+    assert.ok(claves.includes('/15/304/17000.png'), 'el último sigue');
+  });
+
+  test('uno de más de 7 días se vuelve a pedir; sin señal, sirve el viejo', async () => {
+    const estado = { conRed: true };
+    const sw = montarSw(async () => {
+      if (!estado.conRed) throw new TypeError('Failed to fetch');
+      return png({ blob: async () => new Blob(['nuevo']) });
+    });
+    const viejo = () =>
+      new Response('viejo', { headers: { 'x-rw-guardado': String(Date.now() - 8 * DIA) } });
+    sw.caches.set('rw-mosaicos', new Map([['/15/9372/17000.png', viejo()]]));
+
+    estado.conRed = false;
+    assert.equal(await ((await sw.pedir(MOSAICO, 'cors')) as Response).text(), 'viejo');
+
+    estado.conRed = true;
+    assert.equal(await ((await sw.pedir(MOSAICO, 'cors')) as Response).text(), 'nuevo');
+    assert.equal(sw.pedidos.length, 2);
+  });
+
+  test('una respuesta opaca o con error no se guarda', async () => {
+    let siguiente = png({ type: 'opaque', status: 0 });
+    const sw = montarSw(async () => siguiente);
+    await sw.pedir(mosaicoN(1), 'cors');
+    siguiente = png({ status: 404 });
+    await sw.pedir(mosaicoN(2), 'cors');
+    await soltar();
+    assert.equal(mosaicos(sw).size, 0);
+  });
+
+  test('otros dominios siguen sin tocarse', async () => {
+    const sw = montarSw(async () => png());
+    assert.equal(await sw.pedir('https://fonts.example.com/fuente.woff2', 'cors'), undefined);
+    assert.equal(sw.pedidos.length, 0);
+  });
+
+  test('la copia de mosaicos sobrevive a una actualización', async () => {
+    const caches = new Map<string, Map<string, unknown>>();
+    caches.set('rw-mosaicos', new Map([['/15/1/1.png', 'x']]));
+    caches.set('rewards-vieja', new Map());
+    const sw = montarSw(async () => respuesta(), [], { version: 'nueva', caches });
+    sw.lanzar('activate');
+    await avanzar(10_000);
+    assert.ok(caches.has('rw-mosaicos'));
+    assert.ok(!caches.has('rewards-vieja'), 'la de la versión vieja sí se borra');
   });
 });
