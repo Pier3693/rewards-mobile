@@ -134,6 +134,14 @@ describe('contraste AA en modo oscuro', () => {
     }
   });
 
+  // En claro, blanco sobre el ámbar del status (#d97706) da 3.19:1: el
+  // botón usa un ámbar propio, sin tocar los chips de Reprogramar.
+  test('el botón ámbar de Hoy cumple AA', () => {
+    exigirAA('warn-boton', 'sobre-estado', 'surface', CLARO);
+    exigirAA('warn-boton', 'sobre-estado');
+    assert.equal(CLARO.warn.toLowerCase(), '#d97706', 'Reprogramar no cambia');
+  });
+
   test('el aviso invertido (fondo ink, texto surface) se lee', () => {
     exigirAA('ink', 'surface');
     exigirAA('ink', 'surface', 'surface', CLARO);

@@ -399,7 +399,7 @@ function EstadoEnvio({
       <button
         onClick={sesionVencida ? onIniciarSesion : onReintentar}
         disabled={enviando}
-        className="mt-2.5 flex min-h-11 items-center gap-2 rounded-xl bg-warn px-4 text-[13px] font-semibold text-sobre-estado disabled:opacity-60"
+        className="mt-2.5 flex min-h-11 items-center gap-2 rounded-xl bg-warn-boton px-4 text-[13px] font-semibold text-sobre-estado disabled:opacity-60"
       >
         {sesionVencida ? (
           'Iniciar sesión'

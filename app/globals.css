@@ -20,6 +20,10 @@
   --color-ok-light: #dcfce7;
   --color-warn: #d97706;
   --color-warn-light: #fef3c7;
+  /* Botones ámbar con texto encima ("Reintentar ahora" de Hoy). No es
+     --color-warn: ese es el status Reprogramar y sus chips. Blanco sobre
+     #d97706 da 3.19:1; sobre #b45309, 5.02:1 (AA). */
+  --color-warn-boton: #b45309;
   --color-err: #dc2626;
   --color-err-light: #fee2e2;
   /* "No existe": gris, distinto de cualquier motivo. */
@@ -93,6 +97,7 @@ html {
   --color-ok: #30d158;
   --color-err: #ff453a;
   --color-warn: #ffd60a;
+  --color-warn-boton: #ffd60a;
   --color-gris: #8e8e93;
   --color-ok-light: rgba(48, 209, 88, 0.2);
   --color-err-light: rgba(255, 69, 58, 0.2);
