@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {
   getRutaDeHoy,
   getLocalDelDia,
+  precargarLocalesDelDia,
+  MS_LOCAL_FRESCO,
   guardarLocalDelDia,
   localDelDiaEnCache,
   rutaNecesitaRefresco,
@@ -370,11 +372,14 @@ describe('locales del día en el celular', () => {
     assert.equal(localDelDiaEnCache<{ comercio: string }>('PC-0001')?.datos.comercio, 'Tambo+');
   });
 
+  /** Un momento en que la copia recién guardada ya no es reciente. */
+  const MAS_TARDE = () => Date.now() + MS_LOCAL_FRESCO + 1000;
+
   test('sin señal usa la copia y dice de cuándo es', async () => {
     guardarLocalDelDia('PC-0001', { comercio: 'Tambo+' });
     sinSenal();
 
-    const r = await getLocalDelDia<{ comercio: string }>('PC-0001');
+    const r = await getLocalDelDia<{ comercio: string }>('PC-0001', undefined, MAS_TARDE());
 
     assert.equal(r.ok, true);
     assert.equal(r.data?.comercio, 'Tambo+');
@@ -387,7 +392,7 @@ describe('locales del día en el celular', () => {
     guardarLocalDelDia('PC-0001', { comercio: 'Tambo+' });
     backend({ ok: false, error: 'Local no encontrado' });
 
-    const r = await getLocalDelDia('PC-0001');
+    const r = await getLocalDelDia('PC-0001', undefined, MAS_TARDE());
 
     assert.equal(r.ok, false);
   });
@@ -420,5 +425,78 @@ describe('locales del día en el celular', () => {
       }),
     );
     assert.equal(localDelDiaEnCache('PC-0001'), null);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('no pedir dos veces el mismo local', () => {
+  let llamadasLocal = 0;
+
+  beforeEach(() => {
+    montarNavegador();
+    borrarCacheDelDia();
+    llamadasLocal = 0;
+  });
+  afterEach(() => {
+    globalThis.fetch = fetchReal;
+  });
+
+  /** Un backend que cuenta las llamadas y tarda un poco, como Apps Script. */
+  function backendLento(cuerpo: unknown) {
+    globalThis.fetch = (async () => {
+      llamadasLocal++;
+      await new Promise((r) => setTimeout(r, 5));
+      return { status: 200, ok: true, json: async () => cuerpo } as Response;
+    }) as typeof fetch;
+  }
+
+  // El caso medido: Hoy precarga, el CAP abre el detalle y luego el
+  // registro. Antes eran 3 llamadas iguales; ahora 1.
+  test('Hoy → Detalle → Registro hace una sola llamada', async () => {
+    backendLento({ ok: true, data: { comercio: 'Tambo+' } });
+
+    await precargarLocalesDelDia(['PC-0001']);
+    const detalle = await getLocalDelDia<{ comercio: string }>('PC-0001');
+    const registro = await getLocalDelDia<{ comercio: string }>('PC-0001');
+
+    assert.equal(llamadasLocal, 1);
+    assert.equal(detalle.data?.comercio, 'Tambo+');
+    assert.equal(registro.data?.comercio, 'Tambo+');
+    assert.equal(registro.deCache, undefined, 'no es un aviso de sin señal');
+  });
+
+  test('una copia de más de 10 min se vuelve a pedir', async () => {
+    backendLento({ ok: true, data: { comercio: 'Tambo+' } });
+    await getLocalDelDia('PC-0001');
+
+    backendLento({ ok: true, data: { comercio: 'Tambo+ Express' } });
+    const r = await getLocalDelDia<{ comercio: string }>(
+      'PC-0001',
+      undefined,
+      Date.now() + MS_LOCAL_FRESCO + 1000,
+    );
+
+    assert.equal(llamadasLocal, 2, 'la primera y la de refresco');
+    assert.equal(r.data?.comercio, 'Tambo+ Express');
+  });
+
+  // El detalle y la precarga piden el mismo local a la vez: una sola llamada.
+  test('dos pedidos a la vez del mismo local comparten la llamada', async () => {
+    backendLento({ ok: true, data: { comercio: 'Tambo+' } });
+
+    const [a, b] = await Promise.all([
+      getLocalDelDia<{ comercio: string }>('PC-0001'),
+      getLocalDelDia<{ comercio: string }>('pc-0001'),
+    ]);
+
+    assert.equal(llamadasLocal, 1);
+    assert.equal(a.data?.comercio, 'Tambo+');
+    assert.equal(b.data?.comercio, 'Tambo+');
+  });
+
+  test('locales distintos sí piden cada uno', async () => {
+    backendLento({ ok: true, data: { comercio: 'X' } });
+    await Promise.all([getLocalDelDia('PC-0001'), getLocalDelDia('PC-0002')]);
+    assert.equal(llamadasLocal, 2);
   });
 });

@@ -183,18 +183,48 @@ export interface RespuestaLocal<T> extends ApiResponse<T> {
 }
 
 /**
- * Los datos de un local: del backend si hay señal y, si no, la copia
- * del celular. La usan el detalle y el registro.
+ * Una copia de menos de esto se usa sin preguntar al backend. Cubre el
+ * recorrido normal Hoy → Detalle → Registro, que antes hacía tres
+ * llamadas iguales a Apps Script (de 1 a 3 s cada una) por el mismo local.
+ */
+export const MS_LOCAL_FRESCO = 10 * 60_000;
+
+/** Pedidos en curso por local: dos pantallas a la vez comparten uno. */
+const localesEnVuelo = new Map<string, Promise<ApiResponse<unknown>>>();
+
+/** Pide un local al backend (uno en vuelo por local) y guarda la copia. */
+function pedirLocal<T>(idLocal: string, msLimite = MS_LIMITE_CARGA): Promise<ApiResponse<T>> {
+  const id = claveLocal(idLocal);
+  const enCurso = localesEnVuelo.get(id);
+  if (enCurso) return enCurso as Promise<ApiResponse<T>>;
+
+  const pedido = api<T>('getAutocompletado', { id_local: idLocal }, { msLimite })
+    .then((r) => {
+      if (r.ok && r.data) guardarLocalDelDia(idLocal, r.data);
+      return r;
+    })
+    .finally(() => localesEnVuelo.delete(id));
+  localesEnVuelo.set(id, pedido as Promise<ApiResponse<unknown>>);
+  return pedido;
+}
+
+/**
+ * Los datos de un local, para el detalle y el registro:
+ * - si el celular lo guardó hace menos de 10 min, esa copia, sin red;
+ * - si no, del backend, y si el fallo es de camino, la copia vieja.
  */
 export async function getLocalDelDia<T>(
   idLocal: string,
   msLimite = MS_LIMITE_CARGA,
+  ahora = Date.now(),
 ): Promise<RespuestaLocal<T>> {
-  const r = await api<T>('getAutocompletado', { id_local: idLocal }, { msLimite });
-  if (r.ok && r.data) {
-    guardarLocalDelDia(idLocal, r.data);
-    return r;
+  const reciente = localDelDiaEnCache<T>(idLocal);
+  if (reciente && ahora - reciente.guardadoEn < MS_LOCAL_FRESCO) {
+    return { ok: true, data: reciente.datos };
   }
+
+  const r = await pedirLocal<T>(idLocal, msLimite);
+  if (r.ok && r.data) return r;
 
   // Solo se cae a la copia si el fallo fue de camino: si el backend dice
   // que el local no existe, una copia vieja no debe taparlo.
@@ -225,9 +255,9 @@ export async function precargarLocalesDelDia(idsLocales: string[]) {
       (id) => !localDelDiaEnCache(id),
     );
     for (const id of faltan) {
-      const r = await api('getAutocompletado', { id_local: id }, { msLimite: MS_LIMITE_CARGA });
+      // Comparte el pedido si el CAP abre ese local mientras tanto.
+      const r = await pedirLocal(id);
       if (!r.ok || !r.data) break;
-      guardarLocalDelDia(id, r.data);
     }
   } finally {
     precargando = false;
