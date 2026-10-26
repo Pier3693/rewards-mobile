@@ -442,9 +442,9 @@ const PANTALLAS = [
     },
   },
   {
-    nombre: 'buscar',
+    nombre: 'registrar-buscar',
     pasos: async (p) => {
-      await p.ir('/buscar');
+      await p.ir('/registrar');
       await p.evaluar(escribir('input', 'plaza vea'));
       await esperar(1500);
     },

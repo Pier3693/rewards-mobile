@@ -5,6 +5,14 @@ const nextConfig = {
       { protocol: 'https', hostname: 'drive.google.com' },
     ],
   },
+  async redirects() {
+    return [
+      // Buscar pasó a ser Mapa; la búsqueda de comercios vive en Registrar.
+      // No permanente: una pantalla vieja guardada o un enlace siguen
+      // llegando a donde está la búsqueda ahora.
+      { source: '/buscar', destination: '/registrar', permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { IconHome, IconSearch, IconPlus, IconUser, IconClock } from '@/components/icons';
+import { IconHome, IconMapa, IconPlus, IconUser, IconClock } from '@/components/icons';
 
 /**
  * Pantallas secundarias: tienen su propia salida y no llevan barra.
@@ -35,9 +35,10 @@ export default function TabBar() {
           Hoy
         </Link>
 
-        <Link href="/buscar" className={item(is('/buscar'))}>
-          <IconSearch className="h-[22px] w-[22px]" />
-          Buscar
+        {/* La búsqueda de comercios vive en + Registrar. */}
+        <Link href="/mapa" className={item(is('/mapa'))}>
+          <IconMapa className="h-[22px] w-[22px]" />
+          Mapa
         </Link>
 
         {/* Botón central elevado (mockup 3) */}
