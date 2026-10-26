@@ -36,6 +36,13 @@ import {
   mensajeContacto,
 } from '@/lib/perfil';
 import { pedirVersion, buscarActualizacion } from '@/lib/version';
+import {
+  estaInstalada,
+  instalar,
+  instruccionesDe,
+  plataformaDe,
+  EVENTO_INSTALACION,
+} from '@/lib/instalacion';
 import { ADMIN_WHATSAPP, ADMIN_EMAIL } from '@/lib/config';
 import BottomSheet from '@/components/BottomSheet';
 import {
@@ -66,10 +73,16 @@ export default function PerfilPage() {
   const [avisoVersion, setAvisoVersion] = useState('');
   const [confirmaSalida, setConfirmaSalida] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  /** null hasta saberlo en el navegador: así no parpadea la fila. */
+  const [instalada, setInstalada] = useState<boolean | null>(null);
+  const [instrucciones, setInstrucciones] = useState('');
 
   useEffect(() => {
     setTema(leerPreferencia());
     pedirVersion().then(setVersion);
+    setInstalada(estaInstalada());
+    const alCambiarInstalacion = () => setInstalada(estaInstalada());
+    window.addEventListener(EVENTO_INSTALACION, alCambiarInstalacion);
 
     // Lo guardado primero, para que el resumen salga ya; luego lo fresco.
     const copia = historialEnCopia();
@@ -80,6 +93,7 @@ export default function PerfilPage() {
     getRutaDeHoy().then((r) => {
       if (r.ok && r.data) setDia(r.data);
     });
+    return () => window.removeEventListener(EVENTO_INSTALACION, alCambiarInstalacion);
   }, []);
 
   const hoy = useMemo(() => diaDeHoy(), []);
@@ -110,6 +124,13 @@ export default function PerfilPage() {
   function elegirTema(p: Preferencia) {
     setTema(p);
     cambiarPreferencia(p);
+  }
+
+  /** Para quien cerró el aviso del login y ahora sí quiere instalar. */
+  async function pedirInstalar() {
+    const r = await instalar();
+    if (r === 'instrucciones') setInstrucciones(instruccionesDe(plataformaDe(navigator.userAgent)));
+    else setInstalada(estaInstalada());
   }
 
   async function buscar() {
@@ -239,6 +260,21 @@ export default function PerfilPage() {
             </button>
           </div>
           {avisoVersion && <p className="mt-2 text-[12.5px] text-ink-2">{avisoVersion}</p>}
+
+          {instalada === false && (
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Instalar app</p>
+                <p className="text-xs text-ink-2">Ábrela desde tu pantalla de inicio</p>
+              </div>
+              <button
+                onClick={pedirInstalar}
+                className="min-h-11 shrink-0 rounded-xl px-3 text-[13px] font-semibold text-primary"
+              >
+                Instalar
+              </button>
+            </div>
+          )}
         </div>
       </Seccion>
 
@@ -250,6 +286,18 @@ export default function PerfilPage() {
       </button>
 
       <p className="mt-8 pb-4 text-center text-xs text-ink-2">© 2026 Rewards Marketing Relacional</p>
+
+      {instrucciones && (
+        <BottomSheet titulo="Instalar app" onClose={() => setInstrucciones('')}>
+          <p className="text-[14px]">{instrucciones}</p>
+          <button
+            onClick={() => setInstrucciones('')}
+            className="btn-grad mt-5 min-h-[52px] w-full rounded-2xl text-[15px] font-semibold text-white"
+          >
+            Entendido
+          </button>
+        </BottomSheet>
+      )}
 
       {confirmaSalida && cierre && (
         <BottomSheet titulo={cierre.titulo} onClose={() => setConfirmaSalida(false)}>

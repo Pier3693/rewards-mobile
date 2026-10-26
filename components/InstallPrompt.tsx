@@ -1,115 +1,96 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { IconX } from '@/components/icons';
+import {
+  escucharInstalacion,
+  hayEventoInstalar,
+  instalar,
+  debeMostrarAviso,
+  avisoYaSalio,
+  marcarAvisoVisto,
+  estaInstalada,
+  plataformaDe,
+  instruccionesDe,
+  EVENTO_INSTALACION,
+  type Plataforma,
+} from '@/lib/instalacion';
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-const KEY_DISMISS = 'rw_install_dismissed';
-
+/**
+ * Va montado en toda la app para no perder el evento de instalar de
+ * Chrome (lo usa luego Perfil), pero el aviso solo se ENSEÑA en el
+ * login, una sola vez por celular.
+ */
 export default function InstallPrompt() {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [modo, setModo] = useState<'auto' | 'ios' | 'android-manual' | null>(null);
+  const pathname = usePathname();
+  const [plataforma, setPlataforma] = useState<Plataforma>('otro');
+  const [hayEvento, setHayEvento] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // El service worker lo registra ActualizacionApp.
-
-    // Atajo para pruebas: ?installtest=1 ignora cualquier cierre
-    // anterior guardado en localStorage (útil para probar el banner
-    // repetidamente sin borrar datos del navegador cada vez).
-    const forzarPrueba =
-      typeof window !== 'undefined' &&
-      new URLSearchParams(window.location.search).get('installtest') === '1';
-
-    if (forzarPrueba) {
-      localStorage.removeItem(KEY_DISMISS);
-    } else if (localStorage.getItem(KEY_DISMISS) === '1') {
-      return;
-    }
-
-    const yaInstalada =
-      !forzarPrueba &&
-      (window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as unknown as { standalone?: boolean }).standalone === true);
-    if (yaInstalada) return;
-
-    const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const esSafari = /safari/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
-    const esAndroid = /android/i.test(navigator.userAgent);
-
-    function onBeforeInstall(e: Event) {
-      e.preventDefault();
-      setDeferred(e as BeforeInstallPromptEvent);
-      setModo('auto');
-      setVisible(true);
-    }
-    window.addEventListener('beforeinstallprompt', onBeforeInstall);
-
-    if (esIOS && esSafari) {
-      setModo('ios');
-      setTimeout(() => setVisible(true), 2000);
-    } else if (esAndroid) {
-      // Chrome a veces retiene beforeinstallprompt por heurísticas de
-      // "engagement" y puede no disparar en la primera visita. Si tras
-      // unos segundos no llegó, mostramos instrucciones manuales igual.
-      const t = setTimeout(() => {
-        setModo((actual) => actual ?? 'android-manual');
-        setVisible(true);
-      }, 4000);
-      return () => {
-        clearTimeout(t);
-        window.removeEventListener('beforeinstallprompt', onBeforeInstall);
-      };
-    }
-
-    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+    escucharInstalacion();
+    setPlataforma(plataformaDe(navigator.userAgent));
+    const actualizar = () => setHayEvento(hayEventoInstalar());
+    actualizar();
+    window.addEventListener(EVENTO_INSTALACION, actualizar);
+    return () => window.removeEventListener(EVENTO_INSTALACION, actualizar);
   }, []);
 
-  async function instalar() {
-    if (!deferred) return;
-    await deferred.prompt();
-    const { outcome } = await deferred.userChoice;
-    if (outcome === 'accepted') cerrar(true);
-  }
+  useEffect(() => {
+    if (visible) return;
+    const toca = debeMostrarAviso({
+      ruta: pathname,
+      yaSalio: avisoYaSalio(),
+      instalada: estaInstalada(),
+      plataforma,
+      hayEvento,
+    });
+    if (!toca) return;
+    // Un respiro para que primero se vea el login. En cuanto se enseña,
+    // queda marcado: no vuelve a salir solo nunca más.
+    const t = setTimeout(() => {
+      setVisible(true);
+      marcarAvisoVisto();
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [pathname, plataforma, hayEvento, visible]);
 
-  function cerrar(instalada = false) {
+  // Al entrar a la app desaparece, aunque no se haya cerrado.
+  if (!visible || pathname !== '/login') return null;
+
+  const conBoton = hayEvento;
+  const texto = conBoton
+    ? 'Ábrela desde tu pantalla de inicio, como cualquier app, y trabaja sin señal.'
+    : instruccionesDe(plataforma);
+
+  async function aceptar() {
+    await instalar();
     setVisible(false);
-    if (!instalada) localStorage.setItem(KEY_DISMISS, '1');
   }
-
-  if (!visible) return null;
-
-  const textoInstrucciones =
-    modo === 'ios'
-      ? 'Toca el ícono compartir ↑ y luego "Agregar a inicio"'
-      : modo === 'android-manual'
-      ? 'Toca el menú ⋮ del navegador y selecciona "Instalar app" o "Agregar a pantalla de inicio"'
-      : 'Accede más rápido desde tu pantalla de inicio';
 
   return (
-    <div className="fixed inset-x-4 bottom-24 z-50 mx-auto max-w-md rounded-2xl bg-ink px-4 py-3.5 text-surface shadow-xl">
+    <div className="card fixed inset-x-4 bottom-6 z-50 mx-auto max-w-md p-4 shadow-xl safe-b">
       <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface/15">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-light text-xl">
           📲
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold">Instalar como app</p>
-          <p className="mt-0.5 text-[11.5px] leading-snug text-surface/75">
-            {textoInstrucciones}
-          </p>
+          <p className="text-[14px] font-semibold">Instala Rewards en tu celular</p>
+          <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">{texto}</p>
         </div>
-        <button onClick={() => cerrar()} className="shrink-0 p-1 text-surface/60">
+        <button
+          onClick={() => setVisible(false)}
+          aria-label="Cerrar"
+          className="-mr-1 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2"
+        >
           <IconX className="h-4 w-4" />
         </button>
       </div>
-      {modo === 'auto' && (
+      {conBoton && (
         <button
-          onClick={instalar}
-          className="mt-3 w-full rounded-xl bg-surface py-2 text-[13px] font-semibold text-ink"
+          onClick={aceptar}
+          className="btn-grad mt-3 min-h-11 w-full rounded-xl text-[14px] font-semibold text-white"
         >
           Instalar
         </button>

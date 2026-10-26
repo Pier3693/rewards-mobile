@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getUsuario, clearSession, marcarSesionExpirada } from '@/lib/auth';
 import { useCola } from '@/lib/useCola';
 import { normalizarStatus } from '@/lib/visita';
+import { plataformaDe, estaInstalada } from '@/lib/instalacion';
 import {
   getRutaDeHoy,
   invalidarRutaDeHoy,
@@ -346,14 +347,13 @@ export default function HoyPage() {
 //  Estado del envío: Sincronizado / N pendientes
 // ══════════════════════════════════════════════════
 
-/** iPhone en Safari, sin instalar: el navegador puede borrar lo guardado. */
-function esSafariSinInstalar(): boolean {
+/**
+ * iPhone sin instalar: el navegador puede borrar lo guardado en el
+ * celular. Instalada no pasa, así que ahí la línea sobra.
+ */
+function iphoneSinInstalar(): boolean {
   if (typeof navigator === 'undefined') return false;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const instalada =
-    (navigator as unknown as { standalone?: boolean }).standalone === true ||
-    window.matchMedia?.('(display-mode: standalone)').matches;
-  return ios && !instalada;
+  return plataformaDe(navigator.userAgent) === 'ios' && !estaInstalada();
 }
 
 function EstadoEnvio({
@@ -391,7 +391,7 @@ function EstadoEnvio({
           Están guardadas en el celular y se envían solas al haber señal.
         </p>
       )}
-      {esSafariSinInstalar() && (
+      {iphoneSinInstalar() && (
         <p className="mt-1 text-[12px] font-semibold">
           Instala la app en tu pantalla de inicio para no perder visitas guardadas.
         </p>
