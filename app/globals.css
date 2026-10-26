@@ -247,6 +247,19 @@ body {
   border-bottom: 0.5px solid var(--color-line);
 }
 
+/* Zona tocable de 44×44 sin cambiar el dibujo, para botones chicos (la X
+   de una foto, la de una hoja). No toca `position`: el botón ya tiene que
+   estar posicionado (relative o absolute). */
+.toque-44::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
 /* Botón principal con gradiente del mockup */
 .btn-grad {
   background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-mid) 100%);

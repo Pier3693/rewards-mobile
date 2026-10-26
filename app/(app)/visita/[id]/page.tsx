@@ -1230,7 +1230,7 @@ function Paso3({
               <button
                 onClick={() => onQuitarFoto(i)}
                 aria-label={`Quitar foto ${i + 1}`}
-                className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-err text-sobre-estado"
+                className="toque-44 absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-err text-sobre-estado"
               >
                 <IconX className="h-3 w-3" />
               </button>

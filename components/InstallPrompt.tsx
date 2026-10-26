@@ -82,7 +82,7 @@ export default function InstallPrompt() {
         <button
           onClick={() => setVisible(false)}
           aria-label="Cerrar"
-          className="-mr-1 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2"
+          className="toque-44 relative -mr-1 -mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2"
         >
           <IconX className="h-4 w-4" />
         </button>

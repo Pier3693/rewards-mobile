@@ -122,7 +122,7 @@ export default function HistorialPage() {
               <button
                 key={f.valor}
                 onClick={() => setFiltro(f.valor)}
-                className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition ${
+                className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition ${
                   activo ? 'border-primary bg-primary text-white' : 'border-line bg-surface text-ink-2'
                 }`}
               >

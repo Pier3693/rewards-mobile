@@ -218,7 +218,7 @@ export function FormularioCampana({
                   />
                   <button
                     onClick={() => quitarFoto(i)}
-                    className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-err text-sobre-estado"
+                    className="toque-44 absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-err text-sobre-estado"
                   >
                     <IconX className="h-3 w-3" />
                   </button>
