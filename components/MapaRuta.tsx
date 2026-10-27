@@ -53,9 +53,17 @@ function htmlMarcador(e: EstiloMarcador): string {
   return `<span class="${clases}" style="--marcador:${e.color}">${contenido}</span>`;
 }
 
-/** Un círculo con cuántas paradas hay ahí, en el color de marca. */
+/** Ícono de capas: tres rombos apilados. */
+const SVG_CAPAS =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12.5 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>';
+
+/**
+ * Una píldora con capas y cuántas paradas hay ahí, en el color de marca:
+ * así no se confunde con el número de una parada. El nombre accesible lo
+ * pone el marcador ("3 paradas").
+ */
 function htmlGrupo(g: GrupoEnMapa): string {
-  return `<span class="marcador marcador--grupo">${g.paradas.length}</span>`;
+  return `<span class="marcador marcador--grupo" aria-hidden="true">${SVG_CAPAS}<span>${g.paradas.length}</span></span>`;
 }
 
 /** Zoom desde el que tocar un grupo ya no acerca más: lista sus paradas. */
@@ -187,16 +195,17 @@ export default function MapaRuta() {
     capa.clearLayers();
     for (const g of agruparParadas(paradas.conUbicacion, zoom)) {
       if (g.paradas.length > 1) {
-        const nombre = `${g.paradas.length} paradas: ${g.paradas.map((p) => p.numero).join(', ')}`;
-        L.marker([g.centro.lat, g.centro.lng], {
-          icon: L.divIcon({ className: 'marcador-mapa', html: htmlGrupo(g), iconSize: [44, 44], iconAnchor: [22, 22] }),
+        const nombre = `${g.paradas.length} paradas`;
+        const grupo = L.marker([g.centro.lat, g.centro.lng], {
+          // Zona tocable de 64×44 alrededor de la píldora.
+          icon: L.divIcon({ className: 'marcador-mapa', html: htmlGrupo(g), iconSize: [64, 44], iconAnchor: [32, 22] }),
           title: nombre,
-          alt: nombre,
           keyboard: true,
           zIndexOffset: 800,
         })
           .on('click', () => tocarGrupo(g))
           .addTo(capa);
+        grupo.getElement()?.setAttribute('aria-label', nombre);
         continue;
       }
       const p = g.paradas[0];

@@ -561,6 +561,25 @@ const PANTALLAS = [
 ];
 
 /**
+ * El grupo del mapa: una píldora con ícono de capas, que se lee
+ * "N paradas" y se toca con 44 px como mínimo.
+ */
+const MEDIR_GRUPO = `(() => {
+  const pildora = document.querySelector('.marcador--grupo');
+  if (!pildora) return ['no hay grupo'];
+  const problemas = [];
+  const zona = pildora.closest('.leaflet-marker-icon');
+  const nombre = zona?.getAttribute('aria-label') || '';
+  if (!/^\\d+ paradas$/.test(nombre)) problemas.push('aria-label «' + nombre + '»');
+  if (!pildora.querySelector('svg')) problemas.push('sin ícono de capas');
+  const r = pildora.getBoundingClientRect();
+  if (r.width <= r.height) problemas.push('no es píldora (' + Math.round(r.width) + '×' + Math.round(r.height) + ')');
+  const z = zona.getBoundingClientRect();
+  if (z.width < 43.5 || z.height < 43.5) problemas.push('zona tocable ' + Math.round(z.width) + '×' + Math.round(z.height));
+  return problemas;
+})()`;
+
+/**
  * En el mapa, la barra de abajo no puede tapar la atribución ni la ficha
  * de "sin ubicación", y los botones tienen que medir 44 px.
  */
@@ -625,6 +644,12 @@ async function main() {
               }
             }
             await p.captura(`${pantalla.nombre}-${vp.ancho}-${tema}${SIN_SEGURO ? '-sin-seguro' : ''}`);
+
+            if (pantalla.nombre === 'mapa-grupo') {
+              const problemas = await p.evaluar(MEDIR_GRUPO);
+              for (const pr of problemas) console.log(`      ✗ grupo: ${pr}`);
+              fallos += problemas.length;
+            }
 
             if (pantalla.nombre === 'mapa') {
               const problemas = await p.evaluar(MEDIR_MAPA);

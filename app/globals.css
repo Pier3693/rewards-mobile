@@ -372,10 +372,15 @@ body {
 .marcador--pendiente {
   box-shadow: 0 0 0 3px var(--color-warn), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
-/* Varias paradas encimadas: más grande, en el color de marca, con halo. */
+/* Varias paradas encimadas: una píldora con capas y cuántas son, en el
+   color de marca y con halo, para no confundirla con una parada. */
 .marcador--grupo {
-  width: 36px;
-  height: 36px;
+  display: inline-flex;
+  gap: 4px;
+  width: auto;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
   background: var(--color-primary);
   color: #fff;
   font-size: 14px;
