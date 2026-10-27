@@ -182,6 +182,19 @@ describe('la hoja de detalle', () => {
     assert.equal(h.idAsignacion, 'ASG-1');
   });
 
+  test('lo de la asignación gana a la copia del local', () => {
+    const conDatos = parada({ kam: 'LUIS PEREZ', beneficios: '6 PSI' });
+    const h = infoHoja(conDatos, { kam: 'ANA TORRES', beneficios: '20% con BBVA' });
+    assert.equal(h.kam, 'Luis Perez');
+    assert.equal(h.beneficios, '6 PSI');
+  });
+
+  test('sin dato en la asignación, el de la copia del local', () => {
+    const h = infoHoja(parada({ kam: '', beneficios: '' }), { kam: 'ANA TORRES', beneficios: '2x1 jueves' });
+    assert.equal(h.kam, 'Ana Torres');
+    assert.equal(h.beneficios, '2x1 jueves');
+  });
+
   test('sin la copia del local: lo que hay, sin inventar', () => {
     const h = infoHoja(kennedy, null);
     assert.equal(h.kam, '');

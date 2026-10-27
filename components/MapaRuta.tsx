@@ -68,6 +68,8 @@ export default function MapaRuta() {
   const [cargando, setCargando] = useState(true);
   const [abierta, setAbierta] = useState<ParadaEnMapa | null>(null);
   const [local, setLocal] = useState<DatosLocal | null>(null);
+  /** Ya no hay más que esperar del local: "…" pasa a "—". */
+  const [localListo, setLocalListo] = useState(false);
   const [lista, setLista] = useState<'sin-ubicacion' | 'todas' | null>(null);
   const [mosaicosFallan, setMosaicosFallan] = useState(false);
   const [avisoUbicacionCerrado, setAvisoUbicacionCerrado] = useState(false);
@@ -201,15 +203,23 @@ export default function MapaRuta() {
     mapa.current?.setView([ubicacion.lat, ubicacion.lng], Math.max(mapa.current.getZoom(), 16));
   }
 
-  // ── La hoja de una parada: KAM y beneficios de la copia del local ──
+  // ── La hoja de una parada: KAM y beneficios de la asignación, y si
+  //    falta alguno, de la copia del local ──
   useEffect(() => {
     setLocal(null);
-    const id = abierta?.parada.id_local;
-    if (!id) return;
+    setLocalListo(false);
+    const p = abierta?.parada;
+    const id = p?.id_local;
+    if (!p || !id || (p.kam && p.beneficios)) {
+      setLocalListo(true);
+      return;
+    }
     let vivo = true;
-    getLocalDelDia<DatosLocal>(id).then((r) => {
-      if (vivo && r.ok && r.data) setLocal(r.data);
-    });
+    getLocalDelDia<DatosLocal>(id)
+      .then((r) => {
+        if (vivo && r.ok && r.data) setLocal(r.data);
+      })
+      .finally(() => vivo && setLocalListo(true));
     return () => {
       vivo = false;
     };
@@ -384,8 +394,8 @@ export default function MapaRuta() {
           <dl className="mt-3 space-y-2.5 text-[14px]">
             {hoja.mall && <Dato etiqueta="Centro comercial" valor={hoja.mall} />}
             <Dato etiqueta="Dirección" valor={hoja.direccion || '—'} />
-            <Dato etiqueta="KAM" valor={hoja.kam || (local ? '—' : '…')} />
-            <Dato etiqueta="Beneficios activos" valor={hoja.beneficios || (local ? '—' : '…')} />
+            <Dato etiqueta="KAM" valor={hoja.kam || (localListo ? '—' : '…')} />
+            <Dato etiqueta="Beneficios activos" valor={hoja.beneficios || (localListo ? '—' : '…')} />
           </dl>
 
           <div className="mt-5 grid grid-cols-2 gap-2">

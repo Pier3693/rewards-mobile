@@ -199,8 +199,10 @@ export function infoHoja(
   return {
     titulo: parada.comercio || 'Sin comercio',
     motivo: parada.motivo || '',
-    kam: tituloBonito(String(local?.kam || parada.kam || '').trim()),
-    beneficios: String(local?.beneficios || '').trim(),
+    // Primero lo de la asignación; la copia del local trae los beneficios
+    // de la última visita, que en un local nuevo vienen vacíos.
+    kam: tituloBonito(String(parada.kam || local?.kam || '').trim()),
+    beneficios: String(parada.beneficios || local?.beneficios || '').trim(),
     direccion: [tituloBonito(parada.direccion), tituloBonito(parada.distrito)].filter(Boolean).join(' · '),
     mall: centroComercial ? tituloBonito(parada.mall_puerta) : '',
     hora: etiquetaHora(parada),
