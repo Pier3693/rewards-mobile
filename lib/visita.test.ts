@@ -20,6 +20,7 @@ import {
   armarPeticionVisita,
   datosTrasVisita,
   fechaHoja,
+  prellenadoDesde,
   type Borrador,
   type DatosVisita,
 } from './visita.ts';
@@ -447,5 +448,36 @@ describe('fecha como en la hoja', () => {
     assert.equal(fechaHoja(Date.UTC(2026, 9, 27, 20, 26)), '27/10/2026 15:26');
     // Pasada la medianoche en UTC sigue siendo el día anterior en Lima.
     assert.equal(fechaHoja(Date.UTC(2026, 0, 1, 3, 5)), '31/12/2025 22:05');
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('prellenado del paso 2', () => {
+  test('marca lo de la última visita', () => {
+    const p = prellenadoDesde({
+      contacto_nombre: 'Rosa',
+      contacto_cel: '987654321',
+      procesador_pos: 'Niubiz, Culqi',
+      codigo_niubiz: '111',
+      codigo_culqi: '222',
+      beneficios: 'PSI 6, PUNTOS BBVA, 2x1 jueves',
+      material_pop: 'Permite',
+    });
+    assert.equal(p.contacto, 'Rosa');
+    assert.equal(p.celular, '987654321');
+    assert.deepEqual(p.procesadores.marcados, ['Niubiz', 'Culqi']);
+    assert.equal(p.procesadores.codigos.cod_culqi, '222');
+    assert.deepEqual(p.beneficios.marcados, ['PSI 6', 'PUNTOS BBVA']);
+    assert.equal(p.beneficios.textoOtro, '2x1 jueves');
+    assert.equal(p.materialPop, 'Permite');
+  });
+
+  test('sin visitas previas, todo vacío', () => {
+    const p = prellenadoDesde({});
+    assert.equal(p.contacto, '');
+    assert.equal(p.celular, '');
+    assert.deepEqual(p.procesadores.marcados, []);
+    assert.deepEqual(p.beneficios, { marcados: [], otro: false, textoOtro: '' });
+    assert.equal(p.materialPop, '');
   });
 });

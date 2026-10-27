@@ -6,6 +6,15 @@
 //  así esto se puede probar con `npm test`.
 // ══════════════════════════════════════════════════
 
+import {
+  leerProcesadores,
+  leerBeneficios,
+  leerMaterialPop,
+  type SeleccionProcesadores,
+  type SeleccionBeneficios,
+  type MaterialPop,
+} from './datosLocal.ts';
+
 export type Motivo =
   | 'Visita'
   | 'Branding'
@@ -418,6 +427,31 @@ export function datosTrasVisita(
     ultima_observacion: peticion.observacion,
     ultimo_motivo: peticion.motivo || '',
     ...(cap ? { ultimo_cap: cap } : {}),
+  };
+}
+
+/** Lo que el paso 2 trae marcado y escrito al abrir el registro. */
+export interface Prellenado {
+  contacto: string;
+  celular: string;
+  procesadores: SeleccionProcesadores;
+  beneficios: SeleccionBeneficios;
+  materialPop: MaterialPop;
+}
+
+/** El paso 2 a partir de los datos del local (la última visita). */
+export function prellenadoDesde(a: Partial<Autocompletado>): Prellenado {
+  return {
+    contacto: String(a.contacto_nombre || ''),
+    celular: String(a.contacto_cel || ''),
+    procesadores: leerProcesadores(String(a.procesador_pos || ''), {
+      cod_openpay: a.codigo_openpay,
+      cod_niubiz: a.codigo_niubiz,
+      cod_izipay: a.codigo_izipay,
+      cod_culqi: a.codigo_culqi,
+    }),
+    beneficios: leerBeneficios(String(a.beneficios || '')),
+    materialPop: leerMaterialPop(String(a.material_pop || '')),
   };
 }
 

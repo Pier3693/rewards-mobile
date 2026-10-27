@@ -590,6 +590,51 @@ describe('tras guardar una visita, la copia del local la refleja', () => {
     assert.equal(a.ultimo_cap, 'Rosa Diaz');
   });
 
+  // El registro pide `fresco`: con señal pregunta aunque la copia sea de
+  // hace un momento, y guarda lo nuevo.
+  test('con fresco y señal, pregunta al servidor aunque la copia sea reciente', async () => {
+    guardarLocalDelDia('PC-0736', GMO);
+    globalThis.fetch = (async () => {
+      llamadasLocal++;
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({ ok: true, data: { ...GMO, ultima_visita: '27/10/2026 15:26' } }),
+      } as Response;
+    }) as typeof fetch;
+
+    const r = await getLocalDelDia<Autocompletado>('PC-0736', undefined, undefined, { fresco: true });
+
+    assert.equal(llamadasLocal, 1);
+    assert.equal(r.deCache, undefined);
+    assert.equal(r.data?.ultima_visita, '27/10/2026 15:26');
+    assert.equal(localDelDiaEnCache<Autocompletado>('PC-0736')?.datos.ultima_visita, '27/10/2026 15:26');
+  });
+
+  test('sin fresco, la copia reciente se sigue usando sin llamar (detalle y mapa)', async () => {
+    guardarLocalDelDia('PC-0736', GMO);
+    contarLlamadas();
+    await getLocalDelDia('PC-0736');
+    assert.equal(llamadasLocal, 0);
+  });
+
+  test('con fresco y sin señal, la copia con el aviso de cuándo es', async () => {
+    guardarLocalDelDia('PC-0736', GMO);
+    const nav = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    Object.defineProperty(globalThis, 'navigator', { value: { onLine: false }, configurable: true });
+    try {
+      contarLlamadas();
+      const r = await getLocalDelDia<Autocompletado>('PC-0736', undefined, undefined, { fresco: true });
+      assert.equal(llamadasLocal, 0, 'sin señal ni lo intenta');
+      assert.equal(r.deCache, true);
+      assert.ok(r.guardadoEn);
+      assert.equal(r.data?.comercio, 'GMO');
+    } finally {
+      if (nav) Object.defineProperty(globalThis, 'navigator', nav);
+      else delete (globalThis as { navigator?: unknown }).navigator;
+    }
+  });
+
   test('sin copia previa, se crea desde lo que tenía el formulario', async () => {
     actualizarLocalTrasVisita('PC-0736', GMO, datosTrasVisita(visitaGuardada()));
     const copia = localDelDiaEnCache<Autocompletado>('pc-0736')?.datos;

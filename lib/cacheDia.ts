@@ -229,14 +229,22 @@ function pedirLocal<T>(idLocal: string, msLimite = MS_LIMITE_CARGA): Promise<Api
  * Los datos de un local, para el detalle y el registro:
  * - si el celular lo guardó hace menos de 10 min, esa copia, sin red;
  * - si no, del backend, y si el fallo es de camino, la copia vieja.
+ *
+ * Con `fresco` (el registro) no hay atajo de 10 min: con señal siempre se
+ * pregunta al backend, y sin señal se usa la copia avisando de cuándo es.
  */
 export async function getLocalDelDia<T>(
   idLocal: string,
   msLimite = MS_LIMITE_CARGA,
   ahora = Date.now(),
+  { fresco = false }: { fresco?: boolean } = {},
 ): Promise<RespuestaLocal<T>> {
+  const sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
   const reciente = localDelDiaEnCache<T>(idLocal);
-  if (reciente && ahora - reciente.guardadoEn < MS_LOCAL_FRESCO) {
+  if (reciente && fresco && sinRed) {
+    return { ok: true, data: reciente.datos, deCache: true, guardadoEn: reciente.guardadoEn };
+  }
+  if (reciente && !fresco && ahora - reciente.guardadoEn < MS_LOCAL_FRESCO) {
     return { ok: true, data: reciente.datos };
   }
 
@@ -250,7 +258,6 @@ export async function getLocalDelDia<T>(
     return { ok: true, data: copia.datos, deCache: true, guardadoEn: copia.guardadoEn };
   }
 
-  const sinRed = typeof navigator !== 'undefined' && navigator.onLine === false;
   return sinRed
     ? { ...r, error: 'Necesitas conexión para abrir un local que no está en tu ruta de hoy.' }
     : r;

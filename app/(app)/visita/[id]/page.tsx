@@ -20,6 +20,7 @@ import {
   asignacionDeLocal,
   asignacionesPendientesDeLocal,
   getLocalDelDia,
+  localDelDiaEnCache,
   actualizarLocalTrasVisita,
   aplicarEncoladasAlDia,
   type DiaData,
@@ -52,6 +53,7 @@ import {
   componerObservacion,
   armarPeticionVisita,
   datosTrasVisita,
+  prellenadoDesde,
   claveBorrador,
   nuevaIdVisita,
   fijarCreadoEn,
@@ -260,40 +262,64 @@ export default function VisitaPage() {
   }, [cargando, tocado, asignacion, local]);
 
   // ── Carga ──────────────────────────────────────
+  /** Para el refresco por detrás, que no ve el estado de su render. */
+  const tocadoRef = useRef(false);
+  useEffect(() => {
+    tocadoRef.current = tocado;
+  }, [tocado]);
+  /** Cada carga invalida los refrescos de la anterior (Reintentar). */
+  const cargaActual = useRef(0);
+
+  /** Prellenado con la última visita: el CAP solo corrige lo que cambió. */
+  const prellenar = useCallback((a: Autocompletado) => {
+    const p = prellenadoDesde(a);
+    setContacto(p.contacto);
+    setCelular(p.celular);
+    setProcesadores(p.procesadores);
+    setBeneficiosSel(p.beneficios);
+    setMaterialPop(p.materialPop);
+    // Que la asignación vuelva a completar lo que esto deje vacío.
+    prellenadaCon.current = '';
+  }, []);
+
   const cargar = useCallback(async () => {
+    const esta = ++cargaActual.current;
     setCargando(true);
     setErrorCarga('');
     try {
-      // Sin señal, getLocalDelDia cae a la copia del celular, que existe
-      // para los locales de la ruta de hoy.
-      const [rLocal, rDia] = await Promise.all([
-        getLocalDelDia<Autocompletado>(idLocal),
-        getRutaDeHoy(),
-      ]);
-
+      // Los datos del local se piden siempre al servidor (`fresco`): una
+      // copia de hace 5 min puede ser de antes de la última visita. Si el
+      // celular ya tiene una, se pinta con ella y la fresca llega por
+      // detrás; sin señal, se queda la copia con su aviso.
+      const copia = localDelDiaEnCache<Autocompletado>(idLocal);
+      const pedido = getLocalDelDia<Autocompletado>(idLocal, undefined, undefined, { fresco: true });
+      const rDia = await getRutaDeHoy();
       if (rDia.ok && rDia.data) setDia(rDia.data);
 
+      if (copia) {
+        setLocal(copia.datos);
+        setCopiaDeLas(0);
+        prellenar(copia.datos);
+        pedido.then((r) => {
+          if (esta !== cargaActual.current || !r.ok || !r.data) return;
+          setLocal(r.data);
+          setCopiaDeLas(r.deCache ? r.guardadoEn || 0 : 0);
+          // Nunca encima de lo que el CAP ya marcó o escribió.
+          if (!r.deCache && !tocadoRef.current) prellenar(r.data);
+        }, () => {
+          /* sin respuesta: se queda la copia */
+        });
+        return;
+      }
+
+      const rLocal = await pedido;
       if (!rLocal.ok || !rLocal.data) {
         setErrorCarga(rLocal.error || 'No se encontró este local');
         return;
       }
       setLocal(rLocal.data);
       setCopiaDeLas(rLocal.deCache ? rLocal.guardadoEn || 0 : 0);
-
-      // Prellenado con la última visita: el CAP solo corrige lo que cambió.
-      const a = rLocal.data;
-      setContacto(a.contacto_nombre || '');
-      setCelular(a.contacto_cel || '');
-      setProcesadores(
-        leerProcesadores(a.procesador_pos, {
-          cod_openpay: a.codigo_openpay,
-          cod_niubiz: a.codigo_niubiz,
-          cod_izipay: a.codigo_izipay,
-          cod_culqi: a.codigo_culqi,
-        }),
-      );
-      setBeneficiosSel(leerBeneficios(a.beneficios));
-      setMaterialPop(leerMaterialPop(a.material_pop));
+      prellenar(rLocal.data);
     } catch {
       setErrorCarga('No se pudo conectar con el servidor. Intenta de nuevo.');
     } finally {
@@ -301,7 +327,7 @@ export default function VisitaPage() {
       // esqueleto puesto y al CAP sin un botón que tocar.
       setCargando(false);
     }
-  }, [idLocal]);
+  }, [idLocal, prellenar]);
 
   useEffect(() => {
     cargar();
