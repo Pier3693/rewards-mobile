@@ -46,6 +46,20 @@ describe('tituloBonito', () => {
     assert.equal(tituloBonito('   '), '');
   });
 
+  // Sheets con PROPER() deja "1Er"; en mayúsculas llega "1ER".
+  test('ordinales en minuscula despues del numero', () => {
+    assert.equal(tituloBonito('Cal. Libertad Nro. 130 (1Er Piso)'), 'Cal. Libertad Nro. 130 (1er Piso)');
+    assert.equal(tituloBonito('CAL. LIBERTAD NRO. 130 (1ER PISO)'), 'Cal. Libertad Nro. 130 (1er Piso)');
+    assert.equal(tituloBonito('2DO PISO'), '2do Piso');
+    assert.equal(tituloBonito('3RO, 4TO Y 10MO'), '3ro, 4to y 10mo');
+    assert.equal(tituloBonito('1RA ETAPA'), '1ra Etapa');
+  });
+
+  test('no toca otras letras pegadas a un numero', () => {
+    assert.equal(tituloBonito('DPTO 12B'), 'Dpto 12B');
+    assert.equal(tituloBonito('Dpto. 4B'), 'Dpto. 4B');
+  });
+
   test('funciona con tildes y enes', () => {
     assert.equal(tituloBonito('MIRAFLORES ESPAÑA'), 'Miraflores España');
   });

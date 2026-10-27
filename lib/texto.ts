@@ -18,6 +18,17 @@ const PARTICULAS = new Set([
  */
 const SIGLA_CON_PUNTOS = /^[A-ZÁÉÍÓÚÑ]+\.(?:[A-ZÁÉÍÓÚÑ]+\.?)+$/i;
 
+/**
+ * Ordinales pegados a un número: 1er, 2do, 3ro, 4to, 10mo, 1ra. La hoja
+ * los trae a veces como "1Er" (lo que hace PROPER() de Sheets) o "1ER".
+ * Solo estos sufijos: "12B" no se toca.
+ */
+const ORDINAL = /(\d)(ERO|ERA|ER|RO|RA|DO|DA|TO|TA|MO|MA|VO|VA|NO|NA)\b/gi;
+
+function ordinalesEnMinuscula(texto: string): string {
+  return texto.replace(ORDINAL, (_, digito: string, sufijo: string) => digito + sufijo.toLowerCase());
+}
+
 /** Números romanos: II, IV, XII. */
 const ROMANO = /^(?=[IVXLC])M*(C[MD]|D?C{0,3})(X[CL]|L?X{0,3})(I[XV]|V?I{0,3})$/;
 
@@ -41,20 +52,22 @@ function arreglarToken(token: string, esPrimero: boolean): string {
  * "C.C. PLAZA SAN MIGUEL" → "C.C. Plaza San Miguel".
  *
  * Si el texto NO viene todo en mayúsculas se devuelve intacto, para no
- * estropear lo que alguien ya escribió bien ("Jockey Plaza").
+ * estropear lo que alguien ya escribió bien ("Jockey Plaza"), salvo los
+ * ordinales: "1Er Piso" → "1er Piso".
  */
 export function tituloBonito(texto: string | undefined): string {
   const original = String(texto || '').trim();
   if (!original) return '';
-  if (original !== original.toUpperCase()) return original;
+  if (original !== original.toUpperCase()) return ordinalesEnMinuscula(original);
 
   let primero = true;
-  return original.replace(/[^\s/-]+/g, (token) => {
+  const arreglado = original.replace(/[^\s/-]+/g, (token) => {
     const resultado = arreglarToken(token, primero);
     // Las partículas no cuentan como inicio del siguiente tramo.
     primero = false;
     return resultado;
   });
+  return ordinalesEnMinuscula(arreglado);
 }
 
 // ══════════════════════════════════════════════════
