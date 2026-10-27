@@ -103,11 +103,21 @@ export type Encuadre =
   | { tipo: 'centro'; centro: Coordenadas; zoom: number };
 
 /**
- * Qué enseñar al abrir: todos los puntos y la ubicación del CAP. Con un
- * solo punto, centrado y cerca; sin ninguno, null (el mapa va a Lima).
+ * Más lejos que esto de su parada más cercana, el CAP no entra en el
+ * encuadre: el mapa se alejaría tanto que no se verían las paradas.
+ */
+export const MAX_M_CAP_EN_ENCUADRE = 3000;
+
+/**
+ * Qué enseñar al abrir: todos los puntos, y la ubicación del CAP si está
+ * cerca de alguno. Con un solo punto, centrado y cerca; sin ninguno,
+ * el CAP, o null (el mapa va a Lima).
  */
 export function encuadre(puntos: Coordenadas[], ubicacion?: Coordenadas | null): Encuadre | null {
-  const todos = ubicacion ? [...puntos, ubicacion] : [...puntos];
+  const capCerca =
+    !!ubicacion &&
+    (!puntos.length || Math.min(...puntos.map((p) => distanciaMetros(ubicacion, p))) <= MAX_M_CAP_EN_ENCUADRE);
+  const todos = capCerca ? [...puntos, ubicacion!] : [...puntos];
   if (!todos.length) return null;
   if (todos.length === 1) return { tipo: 'centro', centro: todos[0], zoom: ZOOM_UN_PUNTO };
   const lats = todos.map((p) => p.lat);

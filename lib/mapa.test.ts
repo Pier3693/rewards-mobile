@@ -12,6 +12,7 @@ import {
   enlaceComoLlegar,
   CENTRO_LIMA,
   ZOOM_UN_PUNTO,
+  MAX_M_CAP_EN_ENCUADRE,
   type Coordenadas,
 } from './mapa.ts';
 import type { Parada } from './ruta.ts';
@@ -108,13 +109,41 @@ describe('distancia', () => {
 
 describe('encuadre al abrir', () => {
   test('todos los puntos y la ubicación del CAP', () => {
-    const r = encuadre([PLAZA_DE_ARMAS, PARQUE_KENNEDY], { lat: -12.2, lng: -77.0 });
+    const r = encuadre([PLAZA_DE_ARMAS, PARQUE_KENNEDY], { lat: -12.13, lng: -77.02 });
     assert.deepEqual(r, {
       tipo: 'limites',
       limites: [
-        [-12.2, -77.0428],
-        [-12.0464, -77.0],
+        [-12.13, -77.0428],
+        [-12.0464, -77.02],
       ],
+    });
+  });
+
+  // Plaza de Armas está a unos 8 km del Parque Kennedy.
+  test('si el CAP está a más de 3 km, solo las paradas', () => {
+    const otra: Coordenadas = { lat: -12.1305, lng: -77.0302 };
+    const r = encuadre([PARQUE_KENNEDY, otra], PLAZA_DE_ARMAS);
+    assert.deepEqual(r, {
+      tipo: 'limites',
+      limites: [
+        [-12.1305, -77.0302],
+        [-12.1211, -77.0297],
+      ],
+    });
+    assert.ok(MAX_M_CAP_EN_ENCUADRE === 3000);
+  });
+
+  test('si está cerca (500 m), las paradas y el CAP', () => {
+    const cap: Coordenadas = { lat: -12.1166, lng: -77.0297 };
+    const r = encuadre([PARQUE_KENNEDY], cap);
+    assert.equal(r?.tipo, 'limites');
+  });
+
+  test('lejos y con una sola parada, centrado en ella', () => {
+    assert.deepEqual(encuadre([PARQUE_KENNEDY], PLAZA_DE_ARMAS), {
+      tipo: 'centro',
+      centro: PARQUE_KENNEDY,
+      zoom: ZOOM_UN_PUNTO,
     });
   });
 
