@@ -175,6 +175,23 @@ export function localDelDiaEnCache<T>(
   return { datos: g.datos as T, guardadoEn: g.guardadoEn };
 }
 
+/**
+ * Tras guardar una visita: la copia del local pasa a tener lo que se
+ * acaba de registrar. Sin esto, abrir otra vez el local antes de 10 min
+ * (o sin señal) enseñaba los datos de antes de la visita.
+ *
+ * Parte de la copia de hoy si la hay; si no, de `base` (lo que tenía
+ * abierto el formulario).
+ */
+export function actualizarLocalTrasVisita(
+  idLocal: string,
+  base: Record<string, unknown>,
+  cambios: Record<string, unknown>,
+) {
+  const copia = localDelDiaEnCache<Record<string, unknown>>(idLocal);
+  guardarLocalDelDia(idLocal, { ...(copia?.datos || base), ...cambios });
+}
+
 export interface RespuestaLocal<T> extends ApiResponse<T> {
   /** Se usó la copia del celular porque el backend no respondió. */
   deCache?: boolean;

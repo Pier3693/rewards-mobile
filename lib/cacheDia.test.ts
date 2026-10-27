@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   getRutaDeHoy,
   getLocalDelDia,
+  actualizarLocalTrasVisita,
   precargarLocalesDelDia,
   MS_LOCAL_FRESCO,
   guardarLocalDelDia,
@@ -18,6 +19,8 @@ import {
   type DiaData,
 } from './cacheDia.ts';
 import type { Parada } from './ruta.ts';
+import { armarPeticionVisita, datosTrasVisita, type Autocompletado } from './visita.ts';
+import { leerProcesadores, leerBeneficios, leerMaterialPop } from './datosLocal.ts';
 
 function parada(campos: Partial<Parada> = {}): Parada {
   return {
@@ -498,5 +501,100 @@ describe('no pedir dos veces el mismo local', () => {
     backendLento({ ok: true, data: { comercio: 'X' } });
     await Promise.all([getLocalDelDia('PC-0001'), getLocalDelDia('PC-0002')]);
     assert.equal(llamadasLocal, 2);
+  });
+});
+
+// ══════════════════════════════════════════════════
+// El bug de GMO (PC-0736): se registró una visita y, al abrir otra al
+// mismo local antes de 10 min, salía "no tiene visitas previas".
+describe('tras guardar una visita, la copia del local la refleja', () => {
+  let llamadasLocal = 0;
+
+  beforeEach(() => {
+    montarNavegador();
+    borrarCacheDelDia();
+    llamadasLocal = 0;
+  });
+  afterEach(() => {
+    globalThis.fetch = fetchReal;
+  });
+
+  const GMO = {
+    id_local: 'PC-0736',
+    comercio: 'GMO',
+    mall_puerta: 'Puerta calle',
+    direccion: 'Av. Larco 123',
+    kam: 'Ana',
+    procesador_pos: '',
+    codigo_niubiz: '',
+    beneficios: '',
+    material_pop: '',
+    ultima_visita: '',
+  };
+
+  const visitaGuardada = () =>
+    armarPeticionVisita(
+      GMO,
+      {
+        procesador: 'Niubiz, Culqi',
+        cod_openpay: '',
+        cod_niubiz: '111',
+        cod_izipay: '',
+        cod_culqi: '222',
+        beneficios: 'PSI 6, PUNTOS BBVA, 2x1 jueves',
+        material_pop: 'Permite',
+        motivo: 'Visita',
+        contacto: 'Rosa',
+        celular: '987654321',
+        status: 'Todo Ok',
+        observacion: '',
+      },
+      // 27/10/2026 15:26 en Lima (UTC-5).
+      { fotosBase64: [], idAsignacion: '', idVisita: 'v-1', creadoEn: Date.UTC(2026, 9, 27, 20, 26) },
+    );
+
+  function contarLlamadas() {
+    globalThis.fetch = (async () => {
+      llamadasLocal++;
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch;
+  }
+
+  test('guardar visita → abrir de nuevo el mismo local → llegan los datos nuevos', async () => {
+    // La copia de cuando se abrió el primer registro: sin visitas previas.
+    guardarLocalDelDia('PC-0736', GMO);
+
+    actualizarLocalTrasVisita('PC-0736', GMO, datosTrasVisita(visitaGuardada(), 'Rosa Diaz'));
+
+    // Antes de 10 min y sin señal: sale de la copia, ya con la visita.
+    contarLlamadas();
+    const r = await getLocalDelDia<Autocompletado>('PC-0736');
+    assert.equal(llamadasLocal, 0);
+    const a = r.data!;
+    assert.equal(a.ultima_visita, '27/10/2026 15:26');
+    assert.equal(a.comercio, 'GMO', 'lo que la visita no cambia se conserva');
+
+    const procesadores = leerProcesadores(a.procesador_pos, {
+      cod_niubiz: a.codigo_niubiz,
+      cod_culqi: a.codigo_culqi,
+    });
+    assert.deepEqual(procesadores.marcados, ['Niubiz', 'Culqi']);
+    assert.equal(procesadores.codigos.cod_culqi, '222');
+    assert.deepEqual(leerBeneficios(a.beneficios), {
+      marcados: ['PSI 6', 'PUNTOS BBVA'],
+      otro: true,
+      textoOtro: '2x1 jueves',
+    });
+    assert.equal(leerMaterialPop(a.material_pop), 'Permite');
+    assert.equal(a.ultimo_status, 'Todo Ok');
+    assert.equal(a.ultimo_cap, 'Rosa Diaz');
+  });
+
+  test('sin copia previa, se crea desde lo que tenía el formulario', async () => {
+    actualizarLocalTrasVisita('PC-0736', GMO, datosTrasVisita(visitaGuardada()));
+    const copia = localDelDiaEnCache<Autocompletado>('pc-0736')?.datos;
+    assert.equal(copia?.comercio, 'GMO');
+    assert.equal(copia?.codigo_culqi, '222');
+    assert.equal(copia?.ultima_visita, '27/10/2026 15:26');
   });
 });

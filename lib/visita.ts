@@ -373,6 +373,54 @@ export function armarPeticionVisita(
   };
 }
 
+/**
+ * "27/10/2026 15:26" en hora de Lima: el formato de `ultima_visita` en la
+ * hoja, para que la copia del celular se lea igual que la del servidor.
+ */
+export function fechaHoja(ms: number): string {
+  const partes = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(ms))
+      .map((p) => [p.type, p.value]),
+  );
+  return `${partes.day}/${partes.month}/${partes.year} ${partes.hour}:${partes.minute}`;
+}
+
+/**
+ * Lo que la visita recién guardada cambia en los datos del local, con los
+ * nombres de `getAutocompletado`. Se escribe en la copia del celular para
+ * que, al volver a abrir el local, aparezca aunque no haya señal.
+ */
+export function datosTrasVisita(
+  peticion: ReturnType<typeof armarPeticionVisita>,
+  cap = '',
+): Partial<Autocompletado> {
+  return {
+    procesador_pos: peticion.procesador,
+    codigo_openpay: peticion.cod_openpay,
+    codigo_niubiz: peticion.cod_niubiz,
+    codigo_izipay: peticion.cod_izipay,
+    codigo_culqi: peticion.cod_culqi,
+    beneficios: peticion.beneficios,
+    material_pop: peticion.material_pop,
+    contacto_nombre: peticion.contacto,
+    contacto_cel: peticion.celular,
+    ultima_visita: fechaHoja(peticion.creado_en),
+    ultimo_status: peticion.status || '',
+    ultima_observacion: peticion.observacion,
+    ultimo_motivo: peticion.motivo || '',
+    ...(cap ? { ultimo_cap: cap } : {}),
+  };
+}
+
 /** True si el borrador tiene algo que valga la pena ofrecer. */
 export function borradorTieneAlgo(b: Partial<Borrador> | null): boolean {
   if (!b) return false;

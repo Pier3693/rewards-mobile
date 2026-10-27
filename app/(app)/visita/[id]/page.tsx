@@ -20,6 +20,7 @@ import {
   asignacionDeLocal,
   asignacionesPendientesDeLocal,
   getLocalDelDia,
+  actualizarLocalTrasVisita,
   aplicarEncoladasAlDia,
   type DiaData,
 } from '@/lib/cacheDia';
@@ -50,6 +51,7 @@ import {
   celularEsValido,
   componerObservacion,
   armarPeticionVisita,
+  datosTrasVisita,
   claveBorrador,
   nuevaIdVisita,
   fijarCreadoEn,
@@ -531,6 +533,11 @@ export default function VisitaPage() {
       { fotosBase64: fotos, idAsignacion, idVisita, creadoEn },
     );
 
+    // Al volver a abrir este local (aunque sea sin señal) debe verse esta
+    // visita, no la copia de antes.
+    const recordarVisitaEnElLocal = () =>
+      actualizarLocalTrasVisita(local.id_local, local, datosTrasVisita(peticion, getUsuario()?.nombre || ''));
+
     // Las fotos ya se controlan al elegirlas, así que esto no debería
     // saltar nunca. Si salta, no se envía: Vercel la cortaría con un 413.
     if (!peticionCabe(peticion)) {
@@ -566,6 +573,7 @@ export default function VisitaPage() {
     // parada como hecha al instante (la cola cuenta) y la confirmación va
     // diciendo "Enviando… / Enviada ✓ / Pendiente de envío".
     if (await guardarYEnviar(entrada)) {
+      recordarVisitaEnElLocal();
       borrarBorrador(clave);
       setGuardando(false);
       setGuardada(true);
@@ -608,6 +616,7 @@ export default function VisitaPage() {
       return;
     }
 
+    recordarVisitaEnElLocal();
     borrarBorrador(clave);
     // La ruta del día cambió. Se pide por detrás: la confirmación no espera.
     invalidarRutaDeHoy();

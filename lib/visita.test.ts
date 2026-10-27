@@ -18,6 +18,8 @@ import {
   borrarBorrador,
   HORAS_BORRADOR,
   armarPeticionVisita,
+  datosTrasVisita,
+  fechaHoja,
   type Borrador,
   type DatosVisita,
 } from './visita.ts';
@@ -405,6 +407,17 @@ describe('lo que se envía', () => {
     assert.deepEqual(JSON.parse(JSON.stringify(entrada.payload)), JSON.parse(JSON.stringify(p)));
   });
 
+  test('lo que la visita deja en los datos del local', () => {
+    const d = datosTrasVisita(armarPeticionVisita(local, datos, envio), 'Rosa Diaz');
+    assert.equal(d.procesador_pos, 'Niubiz, Culqi');
+    assert.equal(d.codigo_culqi, 'CQ-987');
+    assert.equal(d.material_pop, 'Permite');
+    assert.equal(d.contacto_cel, '987654321');
+    assert.equal(d.ultimo_status, 'Todo Ok');
+    assert.equal(d.ultimo_cap, 'Rosa Diaz');
+    assert.equal(datosTrasVisita(armarPeticionVisita(local, datos, envio)).ultimo_cap, undefined);
+  });
+
   test('sin kam, va vacío', () => {
     assert.equal(armarPeticionVisita({ ...local, kam: '' }, datos, envio).kam, '');
   });
@@ -425,5 +438,14 @@ describe('hora real de la visita', () => {
   test('una visita nueva estrena la suya', () => {
     const primera = fijarCreadoEn(null, 'v-1', 1000);
     assert.deepEqual(fijarCreadoEn(primera, 'v-2', 9000), { idVisita: 'v-2', creadoEn: 9000 });
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('fecha como en la hoja', () => {
+  test('dd/MM/yyyy HH:mm en hora de Lima', () => {
+    assert.equal(fechaHoja(Date.UTC(2026, 9, 27, 20, 26)), '27/10/2026 15:26');
+    // Pasada la medianoche en UTC sigue siendo el día anterior en Lima.
+    assert.equal(fechaHoja(Date.UTC(2026, 0, 1, 3, 5)), '31/12/2025 22:05');
   });
 });
