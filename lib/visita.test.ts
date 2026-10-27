@@ -17,8 +17,11 @@ import {
   leerBorrador,
   borrarBorrador,
   HORAS_BORRADOR,
+  armarPeticionVisita,
   type Borrador,
+  type DatosVisita,
 } from './visita.ts';
+import { nuevaEntrada } from './cola.ts';
 
 // ══════════════════════════════════════════════════
 describe('celular', () => {
@@ -354,6 +357,56 @@ describe('borrador', () => {
   test('basta un campo con algo para ofrecerlo', () => {
     assert.equal(borradorTieneAlgo({ observacion: 'media frase' }), true);
     assert.equal(borradorTieneAlgo({ observacion: '   ' }), false);
+  });
+
+  test('el código de Culqi cuenta', () => {
+    assert.equal(borradorTieneAlgo({ cod_culqi: 'CQ-123' }), true);
+  });
+});
+
+// ══════════════════════════════════════════════════
+describe('lo que se envía', () => {
+  const local = {
+    id_local: 'PC-0001',
+    comercio: 'Bodega Rosa',
+    mall_puerta: 'Puerta calle',
+    direccion: 'Av. Siempre Viva 123',
+    kam: 'Ana',
+  };
+  const datos: DatosVisita = {
+    procesador: 'Niubiz, Culqi',
+    cod_openpay: '',
+    cod_niubiz: '123',
+    cod_izipay: '',
+    cod_culqi: 'CQ-987',
+    beneficios: 'PSI 6, PUNTOS BBVA',
+    material_pop: 'Permite',
+    motivo: 'Visita',
+    contacto: 'Rosa',
+    celular: '987654321',
+    status: 'Todo Ok',
+    observacion: '',
+  };
+  const envio = { fotosBase64: [], idAsignacion: 'ASG-1', idVisita: 'v-1', creadoEn: 1000 };
+
+  test('cod_culqi viaja en el envío', () => {
+    const p = armarPeticionVisita(local, datos, envio);
+    assert.equal(p.cod_culqi, 'CQ-987');
+    assert.equal(p.procesador, 'Niubiz, Culqi');
+    assert.equal(p.id_visita, 'v-1');
+    assert.equal(p.creado_en, 1000);
+  });
+
+  // La cola guarda la petición tal cual y la reenvía igual.
+  test('y en la cola sin conexión', () => {
+    const p = armarPeticionVisita(local, datos, envio);
+    const entrada = nuevaEntrada('v-1', p, { comercio: 'Bodega Rosa', status: 'Todo Ok', idAsignacion: 'ASG-1', idLocal: 'PC-0001' }, 'cap@x.pe', 1000);
+    assert.equal(entrada.payload.cod_culqi, 'CQ-987');
+    assert.deepEqual(JSON.parse(JSON.stringify(entrada.payload)), JSON.parse(JSON.stringify(p)));
+  });
+
+  test('sin kam, va vacío', () => {
+    assert.equal(armarPeticionVisita({ ...local, kam: '' }, datos, envio).kam, '');
   });
 });
 

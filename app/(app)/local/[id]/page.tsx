@@ -178,6 +178,7 @@ export default function LocalPage() {
     { label: 'Código OPENPAY', valor: local.codigo_openpay },
     { label: 'Código NIUBIZ', valor: local.codigo_niubiz },
     { label: 'Código IZIPAY', valor: local.codigo_izipay },
+    { label: 'Código CULQI', valor: local.codigo_culqi || '' },
     { label: 'Beneficios', valor: local.beneficios },
     { label: 'Material POP', valor: local.material_pop },
     {

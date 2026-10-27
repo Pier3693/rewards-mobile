@@ -38,6 +38,8 @@ export interface Autocompletado {
   codigo_openpay: string;
   codigo_niubiz: string;
   codigo_izipay: string;
+  /** Puede faltar si el backend es anterior a Culqi. */
+  codigo_culqi?: string;
   beneficios: string;
   material_pop: string;
   contacto_nombre: string;
@@ -217,6 +219,8 @@ export interface Borrador {
   cod_openpay: string;
   cod_niubiz: string;
   cod_izipay: string;
+  /** Falta en los borradores de antes de Culqi. */
+  cod_culqi?: string;
   beneficios: string;
   material_pop: string;
   observacion: string;
@@ -315,13 +319,67 @@ export function fijarCreadoEn(
   return actual && actual.idVisita === idVisita ? actual : { idVisita, creadoEn: ahora };
 }
 
+// ══════════════════════════════════════════════════
+//  Lo que se envía a registrarVisita
+//
+//  Lo mismo va al envío inmediato y a la cola sin
+//  conexión, que lo guarda y lo reenvía tal cual.
+// ══════════════════════════════════════════════════
+
+/** Lo que el CAP llenó en el formulario. */
+export interface DatosVisita {
+  procesador: string;
+  cod_openpay: string;
+  cod_niubiz: string;
+  cod_izipay: string;
+  cod_culqi: string;
+  beneficios: string;
+  material_pop: string;
+  motivo: Motivo | null;
+  contacto: string;
+  celular: string;
+  status: Status | null;
+  /** Ya con el tipo de incidencia delante (componerObservacion). */
+  observacion: string;
+}
+
+export function armarPeticionVisita(
+  local: Pick<Autocompletado, 'id_local' | 'comercio' | 'mall_puerta' | 'direccion' | 'kam'>,
+  datos: DatosVisita,
+  envio: { fotosBase64: string[]; idAsignacion: string; idVisita: string; creadoEn: number },
+) {
+  return {
+    id_local: local.id_local,
+    comercio: local.comercio,
+    mall_puerta: local.mall_puerta,
+    direccion: local.direccion,
+    kam: local.kam || '',
+    procesador: datos.procesador,
+    cod_openpay: datos.cod_openpay,
+    cod_niubiz: datos.cod_niubiz,
+    cod_izipay: datos.cod_izipay,
+    cod_culqi: datos.cod_culqi,
+    beneficios: datos.beneficios,
+    material_pop: datos.material_pop,
+    motivo: datos.motivo,
+    contacto: datos.contacto,
+    celular: datos.celular,
+    status: datos.status,
+    observacion: datos.observacion,
+    fotosBase64: envio.fotosBase64,
+    id_asignacion: envio.idAsignacion,
+    id_visita: envio.idVisita,
+    creado_en: envio.creadoEn,
+  };
+}
+
 /** True si el borrador tiene algo que valga la pena ofrecer. */
 export function borradorTieneAlgo(b: Partial<Borrador> | null): boolean {
   if (!b) return false;
   // El idVisita no cuenta: un borrador que solo lo tiene está vacío.
   const campos = [
     b.motivo, b.status, b.tipoIncidencia, b.contacto, b.celular,
-    b.procesador, b.cod_openpay, b.cod_niubiz, b.cod_izipay,
+    b.procesador, b.cod_openpay, b.cod_niubiz, b.cod_izipay, b.cod_culqi,
     b.beneficios, b.material_pop, b.observacion,
   ];
   return campos.some((x) => String(x || '').trim());

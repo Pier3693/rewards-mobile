@@ -49,6 +49,7 @@ import {
   errorCelular,
   celularEsValido,
   componerObservacion,
+  armarPeticionVisita,
   claveBorrador,
   nuevaIdVisita,
   fijarCreadoEn,
@@ -126,6 +127,7 @@ export default function VisitaPage() {
   const [codOpenpay, setCodOpenpay] = useState('');
   const [codNiubiz, setCodNiubiz] = useState('');
   const [codIzipay, setCodIzipay] = useState('');
+  const [codCulqi, setCodCulqi] = useState('');
   const [beneficios, setBeneficios] = useState('');
   const [materialPop, setMaterialPop] = useState('');
   const [observacion, setObservacion] = useState('');
@@ -243,6 +245,7 @@ export default function VisitaPage() {
       setCodOpenpay(a.codigo_openpay || '');
       setCodNiubiz(a.codigo_niubiz || '');
       setCodIzipay(a.codigo_izipay || '');
+      setCodCulqi(a.codigo_culqi || '');
       setBeneficios(a.beneficios || '');
       setMaterialPop(a.material_pop || '');
     } catch {
@@ -288,6 +291,7 @@ export default function VisitaPage() {
       cod_openpay: codOpenpay,
       cod_niubiz: codNiubiz,
       cod_izipay: codIzipay,
+      cod_culqi: codCulqi,
       beneficios,
       material_pop: materialPop,
       observacion,
@@ -295,7 +299,7 @@ export default function VisitaPage() {
   }, [
     tocado, guardada, ofreceBorrador, debeElegir, clave, idVisita, paso, motivo, status,
     tipoIncidencia, contacto, celular, procesador, codOpenpay, codNiubiz,
-    codIzipay, beneficios, materialPop, observacion,
+    codIzipay, codCulqi, beneficios, materialPop, observacion,
   ]);
 
   function continuarBorrador() {
@@ -314,6 +318,7 @@ export default function VisitaPage() {
     setCodOpenpay(b.cod_openpay || '');
     setCodNiubiz(b.cod_niubiz || '');
     setCodIzipay(b.cod_izipay || '');
+    setCodCulqi(b.cod_culqi || '');
     setBeneficios(b.beneficios || '');
     setMaterialPop(b.material_pop || '');
     setObservacion(b.observacion || '');
@@ -465,28 +470,24 @@ export default function VisitaPage() {
     guardadoEn.current = fijarCreadoEn(guardadoEn.current, idVisita);
     const creadoEn = guardadoEn.current.creadoEn;
 
-    const peticion = {
-      id_local: local.id_local,
-      comercio: local.comercio,
-      mall_puerta: local.mall_puerta,
-      direccion: local.direccion,
-      kam: local.kam || '',
-      procesador,
-      cod_openpay: codOpenpay,
-      cod_niubiz: codNiubiz,
-      cod_izipay: codIzipay,
-      beneficios,
-      material_pop: materialPop,
-      motivo,
-      contacto,
-      celular,
-      status,
-      observacion: componerObservacion(tipoIncidencia, observacion),
-      fotosBase64: fotos,
-      id_asignacion: idAsignacion,
-      id_visita: idVisita,
-      creado_en: creadoEn,
-    };
+    const peticion = armarPeticionVisita(
+      local,
+      {
+        procesador,
+        cod_openpay: codOpenpay,
+        cod_niubiz: codNiubiz,
+        cod_izipay: codIzipay,
+        cod_culqi: codCulqi,
+        beneficios,
+        material_pop: materialPop,
+        motivo,
+        contacto,
+        celular,
+        status,
+        observacion: componerObservacion(tipoIncidencia, observacion),
+      },
+      { fotosBase64: fotos, idAsignacion, idVisita, creadoEn },
+    );
 
     // Las fotos ya se controlan al elegirlas, así que esto no debería
     // saltar nunca. Si salta, no se envía: Vercel la cortaría con un 413.
@@ -712,7 +713,7 @@ export default function VisitaPage() {
         <Paso2
           valores={{
             contacto, celular, procesador, codOpenpay,
-            codNiubiz, codIzipay, beneficios, materialPop,
+            codNiubiz, codIzipay, codCulqi, beneficios, materialPop,
           }}
           ultimaVisita={local.ultima_visita}
           onCambio={(campo, valor) => {
@@ -723,6 +724,7 @@ export default function VisitaPage() {
               codOpenpay: setCodOpenpay,
               codNiubiz: setCodNiubiz,
               codIzipay: setCodIzipay,
+              codCulqi: setCodCulqi,
               beneficios: setBeneficios,
               materialPop: setMaterialPop,
             };
@@ -1082,6 +1084,7 @@ function Paso2({
     { id: 'codOpenpay', label: 'Código OPENPAY' },
     { id: 'codNiubiz', label: 'Código NIUBIZ' },
     { id: 'codIzipay', label: 'Código IZIPAY' },
+    { id: 'codCulqi', label: 'Código CULQI' },
     { id: 'beneficios', label: 'Beneficios activos', placeholder: '20% dscto, 2x1 jueves…' },
     { id: 'materialPop', label: 'Material POP', placeholder: 'Habladores, stickers…' },
   ];

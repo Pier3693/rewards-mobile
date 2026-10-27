@@ -23,6 +23,7 @@ export interface LocalCompleto {
   codigo_openpay: string;
   codigo_niubiz: string;
   codigo_izipay: string;
+  codigo_culqi?: string;
   beneficios: string;
   material_pop: string;
   contacto_nombre: string;
