@@ -13,6 +13,9 @@ import {
   CENTRO_LIMA,
   ZOOM_UN_PUNTO,
   MAX_M_CAP_EN_ENCUADRE,
+  aPixeles,
+  agruparParadas,
+  type ParadaEnMapa,
   type Coordenadas,
 } from './mapa.ts';
 import type { Parada } from './ruta.ts';
@@ -259,5 +262,60 @@ describe('cómo llegar', () => {
     const aprox = enlaceComoLlegar(parada({ lat: -12.1, lng: -77.0, geo_estado: 'Aproximado' }));
     assert.match(aprox, /maps\/search\/\?api=1&query=/);
     assert.match(enlaceComoLlegar(parada()), /maps\/search\//);
+  });
+});
+
+describe('agrupar las paradas cercanas', () => {
+  const en = (numero: number, lat: number, lng: number): ParadaEnMapa => ({
+    parada: parada({ id_asignacion: `A${numero}` }),
+    numero,
+    coordenadas: { lat, lng },
+  });
+  // A unos 200 m una de otra, en Miraflores.
+  const kennedy = en(1, -12.1211, -77.0297);
+  const cerca = en(2, -12.1229, -77.0297);
+  // El mismo mall: mismas coordenadas.
+  const mall1 = en(3, -12.1318, -77.0303);
+  const mall2 = en(4, -12.1318, -77.0303);
+  const lejos = en(5, -12.0464, -77.0428);
+
+  test('la proyección es la de Leaflet', () => {
+    assert.deepEqual(aPixeles({ lat: 0, lng: 0 }, 0), { x: 128, y: 128 });
+    const p = aPixeles({ lat: 0, lng: 90 }, 1);
+    assert.equal(p.x, 384);
+  });
+
+  test('las lejanas van cada una sola', () => {
+    const g = agruparParadas([kennedy, lejos], 12);
+    assert.equal(g.length, 2);
+    assert.ok(g.every((x) => x.paradas.length === 1 && !x.mismoLugar));
+  });
+
+  test('las cercanas se juntan de lejos y se separan al acercar', () => {
+    assert.equal(agruparParadas([kennedy, cerca], 14).length, 1);
+    assert.equal(agruparParadas([kennedy, cerca], 17).length, 2);
+  });
+
+  test('el mismo mall: mismo lugar, juntas incluso en el zoom máximo', () => {
+    const g = agruparParadas([mall1, mall2], 19);
+    assert.equal(g.length, 1);
+    assert.equal(g[0].mismoLugar, true);
+    assert.deepEqual(g[0].centro, { lat: -12.1318, lng: -77.0303 });
+  });
+
+  test('cercanas pero no en el mismo sitio: no es mismo lugar', () => {
+    const g = agruparParadas([kennedy, cerca], 14);
+    assert.equal(g[0].mismoLugar, false);
+  });
+
+  test('conserva el orden y los números de la ruta', () => {
+    const g = agruparParadas([kennedy, mall1, cerca, mall2, lejos], 13);
+    const numeros = g.map((x) => x.paradas.map((p) => p.numero));
+    assert.deepEqual(numeros, [[1, 2], [3, 4], [5]]);
+  });
+
+  test('sin paradas o sin coordenadas, vacío', () => {
+    assert.deepEqual(agruparParadas([], 15), []);
+    assert.deepEqual(agruparParadas([{ ...kennedy, coordenadas: null }], 15), []);
   });
 });

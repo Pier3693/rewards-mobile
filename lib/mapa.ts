@@ -131,6 +131,63 @@ export function encuadre(puntos: Coordenadas[], ubicacion?: Coordenadas | null):
   };
 }
 
+// ── Agrupar las cercanas ──────────────────────────
+
+/** Radio en pantalla bajo el que dos paradas se juntan: el de un dedo. */
+export const RADIO_GRUPO_PX = 40;
+/** Hasta esta distancia entre todas, están en el mismo sitio (un mall). */
+export const MAX_M_MISMO_LUGAR = 30;
+
+/** Píxeles en el mundo a ese zoom: la proyección Web Mercator de Leaflet. */
+export function aPixeles(c: Coordenadas, zoom: number): { x: number; y: number } {
+  const escala = 256 * 2 ** zoom;
+  const sen = Math.sin((c.lat * Math.PI) / 180);
+  return {
+    x: ((c.lng + 180) / 360) * escala,
+    y: (0.5 - Math.log((1 + sen) / (1 - sen)) / (4 * Math.PI)) * escala,
+  };
+}
+
+export interface GrupoEnMapa {
+  /** En el orden de la ruta. */
+  paradas: ParadaEnMapa[];
+  /** El promedio de sus puntos. */
+  centro: Coordenadas;
+  /** Todas a pocos metros: acercar no las separa, se listan. */
+  mismoLugar: boolean;
+}
+
+/**
+ * Junta las paradas que a ese zoom quedarían una encima de otra. Recorre
+ * en el orden de la ruta y cada una entra al primer grupo cuyo primer
+ * punto esté a menos de `radioPx`. Un grupo de una es un marcador normal.
+ * Solo las que tienen coordenadas.
+ */
+export function agruparParadas(
+  puntos: ParadaEnMapa[],
+  zoom: number,
+  radioPx = RADIO_GRUPO_PX,
+): GrupoEnMapa[] {
+  const grupos: { ancla: { x: number; y: number }; paradas: ParadaEnMapa[] }[] = [];
+  for (const p of puntos) {
+    if (!p.coordenadas) continue;
+    const px = aPixeles(p.coordenadas, zoom);
+    const grupo = grupos.find((g) => Math.hypot(g.ancla.x - px.x, g.ancla.y - px.y) < radioPx);
+    if (grupo) grupo.paradas.push(p);
+    else grupos.push({ ancla: px, paradas: [p] });
+  }
+  return grupos.map(({ paradas }) => {
+    const cs = paradas.map((p) => p.coordenadas!);
+    const centro = {
+      lat: cs.reduce((s, c) => s + c.lat, 0) / cs.length,
+      lng: cs.reduce((s, c) => s + c.lng, 0) / cs.length,
+    };
+    const mismoLugar =
+      cs.length > 1 && cs.every((a) => cs.every((b) => distanciaMetros(a, b) <= MAX_M_MISMO_LUGAR));
+    return { paradas, centro, mismoLugar };
+  });
+}
+
 // ── Marcadores ────────────────────────────────────
 
 const COLOR_MOTIVO: Record<string, string> = {

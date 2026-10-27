@@ -75,6 +75,7 @@ const parada = (id, local, campos = {}) => ({
   estado: '',
   meet_link: '',
   id_local: local,
+  beneficios: '6 PSI',
   ...campos,
 });
 
@@ -119,12 +120,22 @@ const RESPUESTAS = {
         // Coordenadas en dos de las tres, para el mapa.
         parada('ASG-1', 'PC-0001', { lat: -12.1211, lng: -77.0297, geo_estado: 'OK' }),
         parada('ASG-2', 'CC-0002', { motivo: 'Capacitación Virtual', meet_link: 'meet.google.com/abc-defg-hij', hora: '12:00', hora_fin: '13:00', estado: 'rango' }),
-        parada('ASG-3', 'CC-0003', { motivo: 'Branding', hora: '15:00', lat: -12.0886, lng: -77.0158, geo_estado: 'Aproximado' }),
+        parada('ASG-3', 'CC-0003', {
+          motivo: 'Branding',
+          hora: '15:00',
+          mall_puerta: 'Puerta Calle',
+          direccion: 'Cal. Libertad Nro. 130 (1Er Piso)',
+          lat: -12.0886,
+          lng: -77.0158,
+          geo_estado: 'Aproximado',
+        }),
+        // En el mismo mall que ASG-1: el mapa las agrupa.
+        parada('ASG-4', 'CC-0004', { motivo: 'Capacitación Presencial', hora: '11:00', lat: -12.1211, lng: -77.0297, geo_estado: 'OK' }),
       ],
       completadas: [
         parada('ASG-0', 'PC-0009', { status: 'Completado', resultado: 'Incidencia', hora: '09:00', lat: -12.1105, lng: -77.0352, geo_estado: 'OK' }),
       ],
-      total: 4,
+      total: 5,
     },
   },
   getAutocompletado: (cuerpo) => ({ ok: true, data: local(cuerpo.id_local || 'PC-0001') }),
@@ -534,7 +545,16 @@ const PANTALLAS = [
   {
     nombre: 'mapa-hoja',
     pasos: async (p) => {
-      await p.evaluar(`(() => { const m = document.querySelector('.leaflet-marker-icon'); if (m) m.click(); return !!m; })()`);
+      // La parada 5 va sola: la de la dirección con "1er" y la ubicación aproximada.
+      await p.evaluar(`(() => { const m = document.querySelector('.leaflet-marker-icon[title^="5."]'); if (m) m.click(); return !!m; })()`);
+      await esperar(1200);
+    },
+  },
+  {
+    nombre: 'mapa-grupo',
+    pasos: async (p) => {
+      await p.ir('/mapa', 3000);
+      await p.evaluar(`(() => { const m = document.querySelector('.marcador--grupo')?.closest('.leaflet-marker-icon'); if (m) m.click(); return !!m; })()`);
       await esperar(1200);
     },
   },

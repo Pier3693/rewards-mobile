@@ -20,12 +20,14 @@ import { useRouter } from 'next/navigation';
 import { getRutaDeHoy, getLocalDelDia, aplicarEncoladasAlDia, paradasDelDia, type DiaData } from '@/lib/cacheDia';
 import {
   separarParadas,
+  agruparParadas,
   encuadre,
   estiloMarcador,
   infoHoja,
   enlaceComoLlegar,
   CENTRO_LIMA,
   type ParadaEnMapa,
+  type GrupoEnMapa,
   type DatosLocal,
   type EstiloMarcador,
 } from '@/lib/mapa';
@@ -51,6 +53,20 @@ function htmlMarcador(e: EstiloMarcador): string {
   return `<span class="${clases}" style="--marcador:${e.color}">${contenido}</span>`;
 }
 
+/** Un círculo con cuántas paradas hay ahí, en el color de marca. */
+function htmlGrupo(g: GrupoEnMapa): string {
+  return `<span class="marcador marcador--grupo">${g.paradas.length}</span>`;
+}
+
+/** Zoom desde el que tocar un grupo ya no acerca más: lista sus paradas. */
+const ZOOM_LISTAR_GRUPO = 18;
+
+interface Lista {
+  titulo: string;
+  subtitulo: string;
+  paradas: ParadaEnMapa[];
+}
+
 function instruccionesUbicacion(): string {
   const p = typeof navigator !== 'undefined' ? plataformaDe(navigator.userAgent) : 'otro';
   if (p === 'ios') return 'En el iPhone: Ajustes > Privacidad y seguridad > Localización > Sitios web de Safari (o Rewards) > Mientras se usa.';
@@ -70,7 +86,9 @@ export default function MapaRuta() {
   const [local, setLocal] = useState<DatosLocal | null>(null);
   /** Ya no hay más que esperar del local: "…" pasa a "—". */
   const [localListo, setLocalListo] = useState(false);
-  const [lista, setLista] = useState<'sin-ubicacion' | 'todas' | null>(null);
+  const [lista, setLista] = useState<Lista | null>(null);
+  /** Las paradas se agrupan según el zoom. */
+  const [zoom, setZoom] = useState(12);
   const [mosaicosFallan, setMosaicosFallan] = useState(false);
   const [avisoUbicacionCerrado, setAvisoUbicacionCerrado] = useState(false);
 
@@ -115,6 +133,7 @@ export default function MapaRuta() {
     m.on('dragstart', () => {
       movido.current = true;
     });
+    m.on('zoomend', () => setZoom(m.getZoom()));
     capaPuntos.current = L.layerGroup().addTo(m);
     mapa.current = m;
     return () => {
@@ -139,12 +158,48 @@ export default function MapaRuta() {
     [paradas, ubicacion],
   );
 
-  // Los marcadores de las paradas.
+  // Tocar un grupo: acercar hasta separarlas, o si están en el mismo
+  // sitio (o ya no se puede acercar más), la lista de esas paradas.
+  const tocarGrupo = useCallback((g: GrupoEnMapa) => {
+    const m = mapa.current;
+    if (!m) return;
+    if (g.mismoLugar || m.getZoom() >= ZOOM_LISTAR_GRUPO) {
+      const mall = infoHoja(g.paradas[0].parada).mall;
+      setLista({
+        titulo: g.mismoLugar && mall ? mall : `${g.paradas.length} paradas aquí`,
+        subtitulo: 'Elige una para ver su detalle',
+        paradas: g.paradas,
+      });
+      return;
+    }
+    movido.current = true;
+    m.fitBounds(L.latLngBounds(g.paradas.map((p) => [p.coordenadas!.lat, p.coordenadas!.lng])), {
+      paddingTopLeft: [48, 230],
+      paddingBottomRight: [48, 72],
+      maxZoom: 19,
+    });
+  }, []);
+
+  // Los marcadores: una parada sola, o un grupo de las que se enciman.
   useEffect(() => {
     const capa = capaPuntos.current;
     if (!capa) return;
     capa.clearLayers();
-    for (const p of paradas.conUbicacion) {
+    for (const g of agruparParadas(paradas.conUbicacion, zoom)) {
+      if (g.paradas.length > 1) {
+        const nombre = `${g.paradas.length} paradas: ${g.paradas.map((p) => p.numero).join(', ')}`;
+        L.marker([g.centro.lat, g.centro.lng], {
+          icon: L.divIcon({ className: 'marcador-mapa', html: htmlGrupo(g), iconSize: [44, 44], iconAnchor: [22, 22] }),
+          title: nombre,
+          alt: nombre,
+          keyboard: true,
+          zIndexOffset: 800,
+        })
+          .on('click', () => tocarGrupo(g))
+          .addTo(capa);
+        continue;
+      }
+      const p = g.paradas[0];
       const estilo = estiloMarcador(p);
       L.marker([p.coordenadas!.lat, p.coordenadas!.lng], {
         icon: L.divIcon({ className: 'marcador-mapa', html: htmlMarcador(estilo), iconSize: [44, 44], iconAnchor: [22, 22] }),
@@ -157,7 +212,7 @@ export default function MapaRuta() {
         .on('click', () => setAbierta(p))
         .addTo(capa);
     }
-  }, [paradas]);
+  }, [paradas, zoom, tocarGrupo]);
 
   // Al abrir: encuadrar las paradas en cuanto están.
   const encuadradoInicial = useRef(false);
@@ -262,7 +317,9 @@ export default function MapaRuta() {
           {sinConexion && (
             <div className="flex items-center gap-2 rounded-2xl bg-warn-light px-3.5 py-2 text-[12.5px] font-medium text-warn shadow-lg backdrop-blur">
               <span className="min-w-0 flex-1">Sin conexión: el mapa puede verse incompleto.</span>
-              <button onClick={() => setLista('todas')} className="min-h-11 shrink-0 font-semibold underline">
+              <button
+                onClick={() => setLista({ titulo: 'Paradas de hoy', subtitulo: 'Por si el mapa no se ve bien', paradas: todas })}
+                className="min-h-11 shrink-0 font-semibold underline">
                 Ver lista
               </button>
             </div>
@@ -320,7 +377,13 @@ export default function MapaRuta() {
       {paradas.sinUbicacion.length > 0 && (
         <div className="mapa-abajo fixed left-4 z-10">
           <button
-            onClick={() => setLista('sin-ubicacion')}
+            onClick={() =>
+              setLista({
+                titulo: 'Sin ubicación en el mapa',
+                subtitulo: 'Estas paradas no tienen coordenadas todavía',
+                paradas: paradas.sinUbicacion,
+              })
+            }
             className="card min-h-11 px-3.5 text-left text-[12.5px] font-semibold shadow-lg"
           >
             {paradas.sinUbicacion.length} {paradas.sinUbicacion.length === 1 ? 'visita' : 'visitas'} sin ubicación en el mapa
@@ -328,15 +391,11 @@ export default function MapaRuta() {
         </div>
       )}
 
-      {/* ── Lista de paradas (sin ubicación, o todas como respaldo) ── */}
+      {/* ── Lista de paradas: sin ubicación, las de un grupo, o todas como respaldo ── */}
       {lista && (
-        <BottomSheet
-          titulo={lista === 'todas' ? 'Paradas de hoy' : 'Sin ubicación en el mapa'}
-          subtitulo={lista === 'todas' ? 'Por si el mapa no se ve bien' : 'Estas paradas no tienen coordenadas todavía'}
-          onClose={() => setLista(null)}
-        >
+        <BottomSheet titulo={lista.titulo} subtitulo={lista.subtitulo} onClose={() => setLista(null)}>
           <ul className="divide-y divide-line">
-            {(lista === 'todas' ? todas : paradas.sinUbicacion).map((p) => (
+            {lista.paradas.map((p) => (
               <li key={p.parada.id_asignacion || p.numero}>
                 <button
                   onClick={() => {
