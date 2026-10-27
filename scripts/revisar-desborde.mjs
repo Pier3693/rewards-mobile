@@ -141,7 +141,16 @@ const RESPUESTAS = {
     },
   },
   getAutocompletado: (cuerpo) => ({ ok: true, data: local(cuerpo.id_local || 'PC-0001') }),
-  buscarComercio: { ok: true, data: [local('PC-0001'), local('CC-0002')] },
+  // Una etiqueta de visita de cada tipo: hace unos días, hoy (en verde,
+  // junto a la de incidencia) y nunca.
+  buscarComercio: {
+    ok: true,
+    data: [
+      local('PC-0001'),
+      { ...local('CC-0002'), ultima_visita: `${fechaHoy} 15:26` },
+      { ...local('PC-0003'), ultima_visita: '', ultimo_status: '' },
+    ],
+  },
   getMisVisitas: {
     ok: true,
     data: [

@@ -6,6 +6,7 @@ import {
   avisoUltimaVisita,
   ultimaFueIncidencia,
   textoAntiguedad,
+  etiquetaVisita,
   esLocalCC,
   textoParaCopiar,
   DIAS_SIN_VISITA_AVISO,
@@ -83,7 +84,7 @@ describe('avisoUltimaVisita', () => {
     // 30 días justos todavía no avisa
     assert.deepEqual(
       avisoUltimaVisita(local({ ultima_visita: '20/09/2026 10:00' }), HOY),
-      { tipo: 'reciente' },
+      { tipo: 'reciente', dias: 30 },
     );
     // 31 sí
     assert.deepEqual(
@@ -92,15 +93,50 @@ describe('avisoUltimaVisita', () => {
     );
   });
 
-  test('una visita de ayer no genera aviso', () => {
+  test('una visita de ayer es reciente', () => {
     assert.deepEqual(
       avisoUltimaVisita(local({ ultima_visita: '19/10/2026 10:00' }), HOY),
-      { tipo: 'reciente' },
+      { tipo: 'reciente', dias: 1 },
     );
   });
 
   test('el umbral es el que dice la constante', () => {
     assert.equal(DIAS_SIN_VISITA_AVISO, 30);
+  });
+});
+
+// GMO (PC-0736) visitado hoy no mostraba ninguna etiqueta.
+describe('etiquetaVisita', () => {
+  const con = (ultima_visita: string, opciones = {}) => etiquetaVisita(local({ ultima_visita }), HOY, opciones);
+
+  test('hoy, en verde', () => {
+    assert.deepEqual(con('20/10/2026 15:26'), { texto: 'Visitado hoy', tono: 'ok', reloj: false });
+  });
+
+  test('ayer y hace unos días, en gris', () => {
+    assert.deepEqual(con('19/10/2026 10:00'), { texto: 'Visitado ayer', tono: 'neutro', reloj: false });
+    assert.equal(con('15/10/2026 10:00').texto, 'Visitado hace 5 días');
+  });
+
+  test('a los 30 días todavía es reciente; a los 31, el aviso con reloj', () => {
+    assert.equal(con('20/09/2026 10:00').texto, 'Visitado hace 30 días');
+    assert.deepEqual(con('19/09/2026 10:00'), { texto: 'Sin visita hace 31 días', tono: 'neutro', reloj: true });
+  });
+
+  test('sin fecha, o con una imposible, nunca visitado', () => {
+    assert.deepEqual(con(''), { texto: 'Nunca visitado', tono: 'neutro', reloj: false });
+    assert.equal(con('31/02/2026').texto, 'Nunca visitado');
+  });
+
+  test('una visita de hoy que sigue en la cola ya cuenta', () => {
+    assert.equal(con('', { encoladaEn: HOY.getTime() }).texto, 'Visitado hoy');
+    assert.equal(con('01/10/2026 10:00', { encoladaEn: HOY.getTime() }).tono, 'ok');
+  });
+
+  test('la cola no tapa una visita más nueva del backend', () => {
+    const ayer = new Date(HOY.getFullYear(), HOY.getMonth(), HOY.getDate() - 1).getTime();
+    assert.equal(con('20/10/2026 09:00', { encoladaEn: ayer }).texto, 'Visitado hoy');
+    assert.equal(con('', { encoladaEn: ayer }).texto, 'Visitado ayer');
   });
 });
 

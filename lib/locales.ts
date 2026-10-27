@@ -68,11 +68,11 @@ export function diasDesde(fecha: string | undefined, ahora = new Date()): number
 export type AvisoVisita =
   | { tipo: 'nunca' }
   | { tipo: 'hace-mucho'; dias: number }
-  | { tipo: 'reciente' };
+  | { tipo: 'reciente'; dias: number };
 
 /**
- * Qué avisar sobre la última visita de un local.
- * Entre 1 y 30 días no se dice nada: llenaría la lista de ruido.
+ * Qué decir sobre la última visita de un local: nunca, hace más de 30
+ * días (un aviso) o reciente (de 0 a 30 días).
  */
 export function avisoUltimaVisita(
   local: Pick<LocalCompleto, 'ultima_visita'>,
@@ -81,7 +81,7 @@ export function avisoUltimaVisita(
   const dias = diasDesde(local.ultima_visita, ahora);
   if (dias === null) return { tipo: 'nunca' };
   if (dias > DIAS_SIN_VISITA_AVISO) return { tipo: 'hace-mucho', dias };
-  return { tipo: 'reciente' };
+  return { tipo: 'reciente', dias };
 }
 
 /** True si la última visita del local terminó en incidencia. */
@@ -97,6 +97,47 @@ export function textoAntiguedad(dias: number | null): string {
   if (dias <= 0) return 'hoy';
   if (dias === 1) return 'ayer';
   return `hace ${dias} días`;
+}
+
+export interface EtiquetaVisita {
+  texto: string;
+  /** 'ok' solo para "Visitado hoy": es lo que evita repetir la visita. */
+  tono: 'ok' | 'neutro';
+  /** El reloj de "Sin visita hace N días". */
+  reloj: boolean;
+}
+
+/**
+ * La etiqueta de visita de un local en el buscador: siempre una.
+ *
+ * `encoladaEn` es la hora de una visita a este local que sigue en el
+ * celular sin enviar: el backend todavía no la tiene, pero cuenta.
+ */
+export function etiquetaVisita(
+  local: Pick<LocalCompleto, 'ultima_visita'>,
+  ahora = new Date(),
+  { encoladaEn }: { encoladaEn?: number } = {},
+): EtiquetaVisita {
+  const delBackend = diasDesde(local.ultima_visita, ahora);
+  let dias = delBackend;
+  if (encoladaEn) {
+    const e = new Date(encoladaEn);
+    const enCola = diasDesde(
+      `${e.getDate()}/${e.getMonth() + 1}/${e.getFullYear()}`,
+      ahora,
+    );
+    if (enCola !== null && (dias === null || enCola < dias)) dias = enCola;
+  }
+
+  if (dias === null) return { texto: 'Nunca visitado', tono: 'neutro', reloj: false };
+  if (dias > DIAS_SIN_VISITA_AVISO) {
+    return { texto: `Sin visita hace ${dias} días`, tono: 'neutro', reloj: true };
+  }
+  return {
+    texto: `Visitado ${textoAntiguedad(dias)}`,
+    tono: dias <= 0 ? 'ok' : 'neutro',
+    reloj: false,
+  };
 }
 
 /** True si el local es de centro comercial. */

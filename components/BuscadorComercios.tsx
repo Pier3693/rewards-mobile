@@ -23,10 +23,12 @@ import {
   type TipoLocal,
 } from '@/lib/busqueda';
 import {
-  avisoUltimaVisita,
+  etiquetaVisita,
   ultimaFueIncidencia,
   type LocalCompleto,
 } from '@/lib/locales';
+import { useCola } from '@/lib/useCola';
+import type { VisitaEncolada } from '@/lib/cola';
 import { partirPorCoincidencia, tituloBonito } from '@/lib/texto';
 import {
   IconSearch,
@@ -34,7 +36,21 @@ import {
   IconX,
   IconChevronRight,
   IconClock,
+  IconCheck,
 } from '@/components/icons';
+
+/**
+ * La visita más nueva de cada local que sigue en el celular sin enviar:
+ * el backend todavía no la cuenta, pero el local ya se visitó.
+ */
+function encoladasPorLocal(visitas: VisitaEncolada[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const v of visitas) {
+    const id = String(v.resumen.idLocal || '').trim().toUpperCase();
+    if (id && v.creadoEn > (m.get(id) || 0)) m.set(id, v.creadoEn);
+  }
+  return m;
+}
 
 export default function BuscadorComercios({
   onElegir,
@@ -52,6 +68,8 @@ export default function BuscadorComercios({
   const [recientes, setRecientes] = useState<string[]>([]);
   /** id_local de los comercios asignados hoy, para el chip de la ruta. */
   const [idsDeHoy, setIdsDeHoy] = useState<Set<string>>(new Set());
+  const { visitas } = useCola();
+  const enCola = useMemo(() => encoladasPorLocal(visitas), [visitas]);
 
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Descarta las respuestas que llegan tarde: si la de "par" vuelve
@@ -239,6 +257,7 @@ export default function BuscadorComercios({
                 enRutaHoy={idsDeHoy.has(
                   String(l.id_local || '').trim().toUpperCase(),
                 )}
+                encoladaEn={enCola.get(String(l.id_local || '').trim().toUpperCase())}
                 onTap={() => onElegir(l)}
               />
             ))}
@@ -256,11 +275,13 @@ function Resultado({
   local,
   query,
   enRutaHoy,
+  encoladaEn,
   onTap,
 }: {
   local: LocalCompleto;
   query: string;
   enRutaHoy: boolean;
+  encoladaEn?: number;
   onTap: () => void;
 }) {
   const esCC = String(local.tipo || '').toUpperCase() === 'CC';
@@ -275,7 +296,7 @@ function Resultado({
     [local, esCC],
   );
 
-  const aviso = avisoUltimaVisita(local);
+  const visita = etiquetaVisita(local, new Date(), { encoladaEn });
   const incidencia = ultimaFueIncidencia(local);
 
   return (
@@ -307,17 +328,19 @@ function Resultado({
               En tu ruta hoy
             </span>
           )}
-          {aviso.tipo === 'nunca' && (
-            <span className="rounded-full bg-gris-light px-2.5 py-0.5 text-[11px] font-semibold text-ink-2">
-              Nunca visitado
-            </span>
-          )}
-          {aviso.tipo === 'hace-mucho' && (
-            <span className="flex items-center gap-1 rounded-full bg-gris-light px-2.5 py-0.5 text-[11px] font-semibold text-ink">
-              <IconClock className="h-3 w-3" />
-              Sin visita hace {aviso.dias} días
-            </span>
-          )}
+          <span
+            className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+              visita.tono === 'ok'
+                ? 'bg-ok-light text-ok-texto'
+                : visita.reloj
+                  ? 'bg-gris-light text-ink'
+                  : 'bg-gris-light text-ink-2'
+            }`}
+          >
+            {visita.tono === 'ok' && <IconCheck className="h-3 w-3" />}
+            {visita.reloj && <IconClock className="h-3 w-3" />}
+            {visita.texto}
+          </span>
           {incidencia && (
             <span className="rounded-full bg-err-light px-2.5 py-0.5 text-[11px] font-semibold text-err">
               Última visita: Incidencia
