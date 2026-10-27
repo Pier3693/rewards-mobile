@@ -44,6 +44,7 @@ const CHROMES = [
 ].filter(Boolean);
 
 const VIEWPORTS = [
+  { ancho: 360, alto: 800 }, // Samsung A14, A15 y A17
   { ancho: 375, alto: 667 }, // iPhone SE
   { ancho: 393, alto: 852 }, // iPhone con Dynamic Island
 ];
@@ -93,6 +94,7 @@ const local = (id) => ({
   codigo_openpay: 'OP-1234567890123456',
   codigo_niubiz: '1234567890123456789',
   codigo_izipay: '',
+  codigo_culqi: 'CQ-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
   beneficios: 'Descuento de 20% con tarjeta, 2x1 los martes y puntos dobles en fechas especiales',
   material_pop: 'Afiche, stopper, habladores y cenefa',
   contacto_nombre: 'Rosa María Fernández de los Santos',
@@ -450,12 +452,15 @@ const borrador = (paso) => `(() => {
     tipoIncidencia: 'Falta material POP',
     contacto: 'Rosa María Fernández de los Santos',
     celular: '987654321',
-    procesador: 'Niubiz',
+    // Formatos viejos: los cuatro procesadores, uno que no es de la lista
+    // y un Otro largo, para ver los chips y todos los códigos a la vez.
+    procesador: 'NI, op / Izipay, PagoEfectivoConUnNombreMuyLargoSinEspacios',
     cod_openpay: 'OP-1234567890123456',
     cod_niubiz: '1234567890123456789',
-    cod_izipay: '',
-    beneficios: 'Descuento de 20% con tarjeta',
-    material_pop: 'Afiche',
+    cod_izipay: 'IZ-000111222333',
+    cod_culqi: 'CQ-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+    beneficios: '6 PSI, Puntos BBVA, promo cuenta sueldo, Descuento de 20% con tarjeta los martes y jueves',
+    material_pop: 'No',
     observacion: ${JSON.stringify(OBSERVACION)},
     guardadoEn: Date.now(),
   }));
@@ -490,6 +495,14 @@ const PANTALLAS = [
       await p.ir('/visita/PC-0001?asg=ASG-1', 2500);
       await p.evaluar(clicPorTexto('Continuar borrador'));
       await esperar(600);
+    },
+  },
+  {
+    // El mismo paso 2, abajo: material POP, beneficios y el texto de Otro.
+    nombre: 'registro-paso2-otro',
+    pasos: async (p) => {
+      await p.evaluar(`(() => { const e = document.getElementById('beneficio-otro'); if (e) e.scrollIntoView({ block: 'center' }); return !!e; })()`);
+      await esperar(400);
     },
   },
   {
