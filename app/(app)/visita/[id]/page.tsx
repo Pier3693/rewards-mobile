@@ -64,6 +64,25 @@ import {
   type Status,
   type Autocompletado,
 } from '@/lib/visita';
+import {
+  PROCESADORES,
+  BENEFICIOS,
+  MATERIAL_POP,
+  SIN_PROCESADORES,
+  SIN_BENEFICIOS,
+  leerProcesadores,
+  procesadoresATexto,
+  alternarProcesador,
+  hayProcesadores,
+  leerBeneficios,
+  beneficiosATexto,
+  alternarBeneficio,
+  hayBeneficios,
+  leerMaterialPop,
+  type SeleccionProcesadores,
+  type SeleccionBeneficios,
+  type MaterialPop,
+} from '@/lib/datosLocal';
 import BottomSheet from '@/components/BottomSheet';
 import ErrorDeCarga from '@/components/ErrorDeCarga';
 import {
@@ -123,13 +142,10 @@ export default function VisitaPage() {
   const [tipoIncidencia, setTipoIncidencia] = useState('');
   const [contacto, setContacto] = useState('');
   const [celular, setCelular] = useState('');
-  const [procesador, setProcesador] = useState('');
-  const [codOpenpay, setCodOpenpay] = useState('');
-  const [codNiubiz, setCodNiubiz] = useState('');
-  const [codIzipay, setCodIzipay] = useState('');
-  const [codCulqi, setCodCulqi] = useState('');
-  const [beneficios, setBeneficios] = useState('');
-  const [materialPop, setMaterialPop] = useState('');
+  // En la hoja son texto ("Niubiz, Culqi"); aquí, lo marcado (lib/datosLocal).
+  const [procesadores, setProcesadores] = useState<SeleccionProcesadores>(SIN_PROCESADORES);
+  const [beneficiosSel, setBeneficiosSel] = useState<SeleccionBeneficios>(SIN_BENEFICIOS);
+  const [materialPop, setMaterialPop] = useState<MaterialPop>('');
   const [observacion, setObservacion] = useState('');
   const [fotos, setFotos] = useState<string[]>([]);
   /**
@@ -216,6 +232,31 @@ export default function VisitaPage() {
   const motivoFijo = (asignacion?.motivo as Motivo) || null;
   const clave = claveBorrador(idLocal, idAsignacion);
 
+  /**
+   * La asignación llega con la ruta, y cuando hay varias el CAP elige
+   * después: por eso va aparte de `cargar`. Solo llena lo que la última
+   * visita dejó vacío, y nunca encima de lo que el CAP ya tocó.
+   */
+  const prellenadaCon = useRef('');
+  useEffect(() => {
+    if (cargando || tocado || !asignacion || !local) return;
+    if (prellenadaCon.current === asignacion.id_asignacion) return;
+    prellenadaCon.current = asignacion.id_asignacion;
+    const desdeAsignacion = leerProcesadores(asignacion.procesador_pos || asignacion.procesador || '', {
+      cod_openpay: asignacion.codigo_openpay,
+      cod_niubiz: asignacion.codigo_niubiz,
+      cod_izipay: asignacion.codigo_izipay,
+      cod_culqi: asignacion.codigo_culqi,
+    });
+    setProcesadores((actual) =>
+      hayProcesadores(actual) || !hayProcesadores(desdeAsignacion) ? actual : desdeAsignacion,
+    );
+    setBeneficiosSel((actual) =>
+      hayBeneficios(actual) ? actual : leerBeneficios(asignacion.beneficios || ''),
+    );
+    setMaterialPop((actual) => actual || leerMaterialPop(asignacion.material_pop || ''));
+  }, [cargando, tocado, asignacion, local]);
+
   // ── Carga ──────────────────────────────────────
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -241,13 +282,16 @@ export default function VisitaPage() {
       const a = rLocal.data;
       setContacto(a.contacto_nombre || '');
       setCelular(a.contacto_cel || '');
-      setProcesador(a.procesador_pos || '');
-      setCodOpenpay(a.codigo_openpay || '');
-      setCodNiubiz(a.codigo_niubiz || '');
-      setCodIzipay(a.codigo_izipay || '');
-      setCodCulqi(a.codigo_culqi || '');
-      setBeneficios(a.beneficios || '');
-      setMaterialPop(a.material_pop || '');
+      setProcesadores(
+        leerProcesadores(a.procesador_pos, {
+          cod_openpay: a.codigo_openpay,
+          cod_niubiz: a.codigo_niubiz,
+          cod_izipay: a.codigo_izipay,
+          cod_culqi: a.codigo_culqi,
+        }),
+      );
+      setBeneficiosSel(leerBeneficios(a.beneficios));
+      setMaterialPop(leerMaterialPop(a.material_pop));
     } catch {
       setErrorCarga('No se pudo conectar con el servidor. Intenta de nuevo.');
     } finally {
@@ -287,19 +331,15 @@ export default function VisitaPage() {
       tipoIncidencia,
       contacto,
       celular,
-      procesador,
-      cod_openpay: codOpenpay,
-      cod_niubiz: codNiubiz,
-      cod_izipay: codIzipay,
-      cod_culqi: codCulqi,
-      beneficios,
+      procesador: procesadoresATexto(procesadores),
+      ...procesadores.codigos,
+      beneficios: beneficiosATexto(beneficiosSel),
       material_pop: materialPop,
       observacion,
     });
   }, [
     tocado, guardada, ofreceBorrador, debeElegir, clave, idVisita, paso, motivo, status,
-    tipoIncidencia, contacto, celular, procesador, codOpenpay, codNiubiz,
-    codIzipay, codCulqi, beneficios, materialPop, observacion,
+    tipoIncidencia, contacto, celular, procesadores, beneficiosSel, materialPop, observacion,
   ]);
 
   function continuarBorrador() {
@@ -314,13 +354,18 @@ export default function VisitaPage() {
     setTipoIncidencia(b.tipoIncidencia || '');
     setContacto(b.contacto || '');
     setCelular(b.celular || '');
-    setProcesador(b.procesador || '');
-    setCodOpenpay(b.cod_openpay || '');
-    setCodNiubiz(b.cod_niubiz || '');
-    setCodIzipay(b.cod_izipay || '');
-    setCodCulqi(b.cod_culqi || '');
-    setBeneficios(b.beneficios || '');
-    setMaterialPop(b.material_pop || '');
+    // Pasa por los mismos lectores: los borradores de antes de los chips
+    // (texto libre) se marcan igual.
+    setProcesadores(
+      leerProcesadores(b.procesador || '', {
+        cod_openpay: b.cod_openpay,
+        cod_niubiz: b.cod_niubiz,
+        cod_izipay: b.cod_izipay,
+        cod_culqi: b.cod_culqi,
+      }),
+    );
+    setBeneficiosSel(leerBeneficios(b.beneficios || ''));
+    setMaterialPop(leerMaterialPop(b.material_pop || ''));
     setObservacion(b.observacion || '');
     setTocado(true);
   }
@@ -473,12 +518,9 @@ export default function VisitaPage() {
     const peticion = armarPeticionVisita(
       local,
       {
-        procesador,
-        cod_openpay: codOpenpay,
-        cod_niubiz: codNiubiz,
-        cod_izipay: codIzipay,
-        cod_culqi: codCulqi,
-        beneficios,
+        procesador: procesadoresATexto(procesadores),
+        ...procesadores.codigos,
+        beneficios: beneficiosATexto(beneficiosSel),
         material_pop: materialPop,
         motivo,
         contacto,
@@ -711,24 +753,30 @@ export default function VisitaPage() {
 
       {paso === 2 && (
         <Paso2
-          valores={{
-            contacto, celular, procesador, codOpenpay,
-            codNiubiz, codIzipay, codCulqi, beneficios, materialPop,
-          }}
+          contacto={contacto}
+          celular={celular}
+          procesadores={procesadores}
+          beneficios={beneficiosSel}
+          materialPop={materialPop}
           ultimaVisita={local.ultima_visita}
-          onCambio={(campo, valor) => {
-            const setters: Record<string, (v: string) => void> = {
-              contacto: setContacto,
-              celular: setCelular,
-              procesador: setProcesador,
-              codOpenpay: setCodOpenpay,
-              codNiubiz: setCodNiubiz,
-              codIzipay: setCodIzipay,
-              codCulqi: setCodCulqi,
-              beneficios: setBeneficios,
-              materialPop: setMaterialPop,
-            };
-            setters[campo]?.(valor);
+          onContacto={(v) => {
+            setContacto(v);
+            setTocado(true);
+          }}
+          onCelular={(v) => {
+            setCelular(v);
+            setTocado(true);
+          }}
+          onProcesadores={(v) => {
+            setProcesadores(v);
+            setTocado(true);
+          }}
+          onBeneficios={(v) => {
+            setBeneficiosSel(v);
+            setTocado(true);
+          }}
+          onMaterialPop={(v) => {
+            setMaterialPop(v);
             setTocado(true);
           }}
         />
@@ -1064,30 +1112,32 @@ function Paso1({
 //  Paso 2 · Datos del local
 // ══════════════════════════════════════════════════
 function Paso2({
-  valores,
+  contacto,
+  celular,
+  procesadores,
+  beneficios,
+  materialPop,
   ultimaVisita,
-  onCambio,
+  onContacto,
+  onCelular,
+  onProcesadores,
+  onBeneficios,
+  onMaterialPop,
 }: {
-  valores: Record<string, string>;
+  contacto: string;
+  celular: string;
+  procesadores: SeleccionProcesadores;
+  beneficios: SeleccionBeneficios;
+  materialPop: MaterialPop;
   ultimaVisita: string;
-  onCambio: (campo: string, valor: string) => void;
+  onContacto: (v: string) => void;
+  onCelular: (v: string) => void;
+  onProcesadores: (v: SeleccionProcesadores) => void;
+  onBeneficios: (v: SeleccionBeneficios) => void;
+  onMaterialPop: (v: MaterialPop) => void;
 }) {
-  const campos: {
-    id: string;
-    label: string;
-    placeholder?: string;
-    modo?: 'numeric';
-  }[] = [
-    { id: 'contacto', label: 'Personal que atendió', placeholder: '¿Quién te atendió?' },
-    { id: 'celular', label: 'Celular', placeholder: '9XXXXXXXX', modo: 'numeric' },
-    { id: 'procesador', label: 'Procesador POS', placeholder: 'Niubiz, Izipay, Openpay…' },
-    { id: 'codOpenpay', label: 'Código OPENPAY' },
-    { id: 'codNiubiz', label: 'Código NIUBIZ' },
-    { id: 'codIzipay', label: 'Código IZIPAY' },
-    { id: 'codCulqi', label: 'Código CULQI' },
-    { id: 'beneficios', label: 'Beneficios activos', placeholder: '20% dscto, 2x1 jueves…' },
-    { id: 'materialPop', label: 'Material POP', placeholder: 'Habladores, stickers…' },
-  ];
+  // Los cuatro de la lista y, detrás, los que venían escritos y no son de ella.
+  const opcionesProcesador = [...PROCESADORES.map((p) => p.valor as string), ...procesadores.extras];
 
   return (
     <>
@@ -1098,39 +1148,186 @@ function Paso2({
           : 'Este local no tiene visitas previas: completa lo que puedas.'}
       </p>
 
-      <div className="space-y-3.5">
-        {campos.map((c) => {
-          const fallo = c.id === 'celular' ? errorCelular(valores.celular) : '';
-          return (
-            <div key={c.id}>
-              <label
-                htmlFor={c.id}
-                className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2"
-              >
-                {c.label}
-              </label>
-              <input
-                id={c.id}
-                value={valores[c.id] || ''}
-                onChange={(e) => onCambio(c.id, e.target.value)}
-                placeholder={c.placeholder}
-                inputMode={c.modo}
-                aria-invalid={!!fallo}
-                className={`w-full rounded-xl border bg-campo px-4 py-3 text-[15px] outline-none focus:ring-4 ${
-                  fallo
-                    ? 'border-err focus:border-err focus:ring-err/10'
-                    : 'border-line focus:border-primary focus:ring-primary/10'
-                }`}
+      <div className="space-y-5">
+        <CampoTexto
+          id="contacto"
+          label="Personal que atendió"
+          valor={contacto}
+          placeholder="¿Quién te atendió?"
+          onCambio={onContacto}
+        />
+        <CampoTexto
+          id="celular"
+          label="Celular"
+          valor={celular}
+          placeholder="9XXXXXXXX"
+          modo="numeric"
+          fallo={errorCelular(celular)}
+          onCambio={onCelular}
+        />
+
+        <div>
+          <GrupoChips id="procesador" titulo="Procesador POS">
+            {opcionesProcesador.map((p) => (
+              <Chip
+                key={p}
+                texto={p}
+                marcado={procesadores.marcados.includes(p)}
+                onTocar={() => onProcesadores(alternarProcesador(procesadores, p))}
               />
-              {/* El error va junto al campo, no en un bloque al final. */}
-              {fallo && (
-                <p className="mt-1 text-[12px] font-medium text-err">{fallo}</p>
-              )}
+            ))}
+          </GrupoChips>
+          {/* Solo los códigos de los marcados: desmarcar borra el suyo. */}
+          {PROCESADORES.filter((p) => procesadores.marcados.includes(p.valor)).map((p) => (
+            <div key={p.campo} className="mt-3">
+              <CampoTexto
+                id={p.campo}
+                label={p.etiqueta}
+                valor={procesadores.codigos[p.campo]}
+                onCambio={(v) =>
+                  onProcesadores({ ...procesadores, codigos: { ...procesadores.codigos, [p.campo]: v } })
+                }
+              />
             </div>
-          );
-        })}
+          ))}
+        </div>
+
+        <div>
+          <p id="material-pop" className={ETIQUETA_CAMPO}>
+            Material POP
+          </p>
+          <div
+            role="radiogroup"
+            aria-labelledby="material-pop"
+            className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-campo p-1"
+          >
+            {MATERIAL_POP.map((m) => {
+              const activo = materialPop === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={activo}
+                  onClick={() => onMaterialPop(m)}
+                  className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg text-[14px] font-semibold transition ${
+                    activo ? 'bg-primary text-white' : 'text-ink-2'
+                  }`}
+                >
+                  {activo && <IconCheck className="h-3.5 w-3.5" />}
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <GrupoChips id="beneficios" titulo="Beneficios activos">
+            {BENEFICIOS.map((b) => (
+              <Chip
+                key={b}
+                texto={b}
+                marcado={beneficios.marcados.includes(b)}
+                onTocar={() => onBeneficios(alternarBeneficio(beneficios, b))}
+              />
+            ))}
+            {/* Desmarcar Otro esconde el texto pero no lo borra: si se
+                vuelve a marcar, sigue ahí. Solo se guarda si está marcado. */}
+            <Chip
+              texto="Otro"
+              marcado={beneficios.otro}
+              onTocar={() => onBeneficios({ ...beneficios, otro: !beneficios.otro })}
+            />
+          </GrupoChips>
+          {beneficios.otro && (
+            <div className="mt-3">
+              <CampoTexto
+                id="beneficio-otro"
+                label="Otro beneficio"
+                valor={beneficios.textoOtro}
+                placeholder="2x1 jueves, 20% dscto…"
+                onCambio={(v) => onBeneficios({ ...beneficios, textoOtro: v })}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </>
+  );
+}
+
+const ETIQUETA_CAMPO = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-2';
+
+function CampoTexto({
+  id,
+  label,
+  valor,
+  placeholder,
+  modo,
+  fallo = '',
+  onCambio,
+}: {
+  id: string;
+  label: string;
+  valor: string;
+  placeholder?: string;
+  modo?: 'numeric';
+  fallo?: string;
+  onCambio: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className={ETIQUETA_CAMPO}>
+        {label}
+      </label>
+      <input
+        id={id}
+        value={valor || ''}
+        onChange={(e) => onCambio(e.target.value)}
+        placeholder={placeholder}
+        inputMode={modo}
+        aria-invalid={!!fallo}
+        className={`w-full rounded-xl border bg-campo px-4 py-3 text-[15px] outline-none focus:ring-4 ${
+          fallo
+            ? 'border-err focus:border-err focus:ring-err/10'
+            : 'border-line focus:border-primary focus:ring-primary/10'
+        }`}
+      />
+      {/* El error va junto al campo, no en un bloque al final. */}
+      {fallo && <p className="mt-1 text-[12px] font-medium text-err">{fallo}</p>}
+    </div>
+  );
+}
+
+/** Varias opciones para marcar: el lector de pantalla las anuncia juntas. */
+function GrupoChips({ id, titulo, children }: { id: string; titulo: string; children: React.ReactNode }) {
+  return (
+    <>
+      <p id={`${id}-titulo`} className={ETIQUETA_CAMPO}>
+        {titulo}
+      </p>
+      <div role="group" aria-labelledby={`${id}-titulo`} className="flex flex-wrap gap-2">
+        {children}
+      </div>
+    </>
+  );
+}
+
+/** Se marca y se desmarca; aria-pressed dice en qué estado está. */
+function Chip({ texto, marcado, onTocar }: { texto: string; marcado: boolean; onTocar: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={marcado}
+      onClick={onTocar}
+      className={`flex min-h-11 max-w-full items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition ${
+        marcado ? 'bg-primary text-white' : 'border border-line bg-surface text-ink-2'
+      }`}
+    >
+      {marcado && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
+      <span className="min-w-0 break-words text-left">{texto}</span>
+    </button>
   );
 }
 
