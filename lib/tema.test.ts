@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import vm from 'node:vm';
 
 import { resolverTema, esPreferencia, SCRIPT_TEMA, COLOR_BARRA, CLAVE_TEMA } from './tema.ts';
-import { contraste, AA } from './contraste.ts';
+import { contraste, componer, AA } from './contraste.ts';
 
 // ══════════════════════════════════════════════════
 //  Contraste: se lee de app/globals.css, así la prueba
@@ -200,6 +200,21 @@ describe('zonas seguras', () => {
   // Con 'black-translucent' la hora del iPhone va siempre en blanco.
   test('la hora blanca se lee sobre la franja, en claro', () => {
     exigirAA('franja', '#ffffff', 'surface', CLARO);
+  });
+});
+
+describe('barra de navegación de Android', () => {
+  // La app instalada (WebAPK) pinta esa barra con el theme_color del
+  // manifest, o deja ver el background_color si no la pinta. El manifest
+  // tiene un solo valor: se usa el de la TabBar en oscuro, para que no
+  // quede una franja blanca debajo.
+  test('el manifest usa el color de la TabBar en oscuro', () => {
+    const manifest = JSON.parse(readFileSync(join(process.cwd(), 'public', 'manifest.json'), 'utf8'));
+    const hex = (rgb: number[]) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
+    const tabbar = hex(componer(OSCURO.barra, OSCURO.bg));
+    assert.equal(tabbar, '#161617');
+    assert.equal(manifest.theme_color.toLowerCase(), tabbar);
+    assert.equal(manifest.background_color.toLowerCase(), tabbar);
   });
 });
 
