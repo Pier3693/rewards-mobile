@@ -18,6 +18,9 @@ import {
 } from '@/lib/cacheDia';
 import { precalentarRutas } from '@/lib/precalentar';
 import { buscarVisitaDeHoy } from '@/lib/historial';
+import { useUbicacion } from '@/lib/useUbicacion';
+import { useRutaSugerida } from '@/lib/useRutaSugerida';
+import { separarParadas, textoDistancia } from '@/lib/mapa';
 import { haceCuanto } from '@/lib/texto';
 import {
   ordenarRuta,
@@ -45,6 +48,7 @@ import {
   IconCheck,
   IconVideo,
   IconEdit,
+  IconUbicacion,
   IconPlay,
   IconNavigation,
   IconClock,
@@ -193,7 +197,25 @@ export default function HoyPage() {
     );
   }, [localesDeLaRuta, actualizando]);
 
-  const siguiente = useMemo(() => siguienteParada(ruta, ahora), [ruta, ahora]);
+  // Con la ubicación ya permitida, la siguiente es la más cercana según
+  // la ruta sugerida (la misma del Mapa). Hoy nunca pide el permiso: si
+  // no lo hay, se queda como antes, por hora.
+  const { ubicacion } = useUbicacion();
+  const enMapa = useMemo(() => {
+    const s = separarParadas(ruta);
+    return [...s.conUbicacion, ...s.sinUbicacion];
+  }, [ruta]);
+  const sugerida = useRutaSugerida(enMapa, ubicacion)?.ruta.pasos[0] || null;
+  const siguiente = useMemo(() => {
+    const porHora = siguienteParada(ruta, ahora);
+    // Un Meet que está por empezar va primero: no hay que ir a ningún lado.
+    if (!sugerida || (porHora && tieneMeet(porHora) && meetEsUrgente(porHora, ahora))) return porHora;
+    return sugerida.lugar.paradas[0].parada;
+  }, [ruta, ahora, sugerida]);
+  const cercania =
+    sugerida && siguiente === sugerida.lugar.paradas[0].parada
+      ? `Más cercana · ${textoDistancia(sugerida.metrosDesdeAnterior)}`
+      : '';
 
   const avance = useMemo(() => {
     const total = ruta.length;
@@ -317,6 +339,7 @@ export default function HoyPage() {
           {siguiente && (
             <SiguienteVisita
               p={siguiente}
+              cercania={cercania}
               ahora={ahora}
               onIniciar={() => registrar(siguiente)}
             />
@@ -538,10 +561,13 @@ function TarjetaAvance({
 // ══════════════════════════════════════════════════
 function SiguienteVisita({
   p,
+  cercania,
   ahora,
   onIniciar,
 }: {
   p: Parada;
+  /** "Más cercana · a 350 m", si sale de la ruta sugerida. */
+  cercania: string;
   ahora: Date;
   onIniciar: () => void;
 }) {
@@ -559,7 +585,13 @@ function SiguienteVisita({
       </h2>
 
       <div className="card border border-primary/25 p-4">
-        <div className="mb-2.5 flex items-center gap-2">
+        <div className="mb-2.5 flex flex-wrap items-center gap-2">
+          {cercania && (
+            <span className="flex items-center gap-1.5 rounded-full bg-ok-light px-2.5 py-1 text-[12px] font-semibold text-ok-texto">
+              <IconUbicacion className="h-3.5 w-3.5" />
+              {cercania}
+            </span>
+          )}
           <span
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${
               estado === 'atrasada'
