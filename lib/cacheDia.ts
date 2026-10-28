@@ -17,6 +17,7 @@
 
 import { api, MS_LIMITE_CARGA, type ApiResponse } from './api.ts';
 import { getUsuario } from './auth.ts';
+import { borrarRutasProximas, rutaDeHoyGuardada } from './rutasProximas.ts';
 import {
   ordenarRuta,
   estaCompletada,
@@ -36,6 +37,8 @@ const CLAVE_DIA = 'rw_ruta_dia';
 const CLAVE_LOCALES = 'rw_locales_dia';
 
 let guardado: DiaData | null = null;
+/** De qué día es `guardado`: si la app quedó abierta de un día a otro, no vale. */
+let guardadoDel = '';
 /** Cuándo se trajo del backend, para poder decírselo al CAP. */
 let actualizadoEn = 0;
 /** La copia en memoria salió del celular y todavía no se confirmó con el backend. */
@@ -136,8 +139,19 @@ function claveLocal(idLocal: string): string {
   return String(idLocal || '').trim().toUpperCase();
 }
 
-function esDeHoyYMio(g: LocalEnDisco | undefined): g is LocalEnDisco {
-  return !!g && g.fecha === hoyTexto() && g.correo === correoActual();
+/**
+ * Cuántos días vale la copia de un local como respaldo sin señal. Más de
+ * uno: los locales de las rutas de los próximos días se guardan antes de
+ * que llegue su día. Con señal se pide igual al servidor (MS_LOCAL_FRESCO).
+ */
+export const DIAS_COPIA_LOCAL = 7;
+
+function esVigenteYMio(g: LocalEnDisco | undefined, ahora = Date.now()): g is LocalEnDisco {
+  return (
+    !!g &&
+    g.correo === correoActual() &&
+    ahora - (g.guardadoEn || 0) <= DIAS_COPIA_LOCAL * 24 * 60 * 60 * 1000
+  );
 }
 
 /**
@@ -148,11 +162,11 @@ export function guardarLocalDelDia(idLocal: string, datos: unknown) {
   const id = claveLocal(idLocal);
   if (!id) return;
   try {
-    // De paso se tira lo de otros días y otros usuarios: si no, el mapa
+    // De paso se tira lo vencido y lo de otros usuarios: si no, el mapa
     // crecería sin fin.
     const vigentes: Record<string, LocalEnDisco> = {};
     for (const [k, g] of Object.entries(leerLocales())) {
-      if (esDeHoyYMio(g)) vigentes[k] = g;
+      if (esVigenteYMio(g)) vigentes[k] = g;
     }
     vigentes[id] = {
       correo: correoActual(),
@@ -166,12 +180,12 @@ export function guardarLocalDelDia(idLocal: string, datos: unknown) {
   }
 }
 
-/** Lo guardado de un local, o null si no hay, es de otro día o de otro CAP. */
+/** Lo guardado de un local, o null si no hay, ya venció o es de otro CAP. */
 export function localDelDiaEnCache<T>(
   idLocal: string,
 ): { datos: T; guardadoEn: number } | null {
   const g = leerLocales()[claveLocal(idLocal)];
-  if (!esDeHoyYMio(g)) return null;
+  if (!esVigenteYMio(g)) return null;
   return { datos: g.datos as T, guardadoEn: g.guardadoEn };
 }
 
@@ -275,8 +289,10 @@ export async function precargarLocalesDelDia(idsLocales: string[]) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   precargando = true;
   try {
+    // Lo que no se guardó hoy: una copia de días atrás se renueva.
+    const locales = leerLocales();
     const faltan = [...new Set(idsLocales.map(claveLocal).filter(Boolean))].filter(
-      (id) => !localDelDiaEnCache(id),
+      (id) => !localDelDiaEnCache(id) || locales[id]?.fecha !== hoyTexto(),
     );
     for (const id of faltan) {
       // Comparte el pedido si el CAP abre ese local mientras tanto.
@@ -291,6 +307,7 @@ export async function precargarLocalesDelDia(idsLocales: string[]) {
 /** Al cerrar sesión: la ruta y los locales son del CAP que se va. */
 export function borrarCacheDelDia() {
   invalidarRutaDeHoy();
+  borrarRutasProximas();
   try {
     storage()?.removeItem(CLAVE_DIA);
     storage()?.removeItem(CLAVE_LOCALES);
@@ -312,16 +329,22 @@ export async function getRutaDeHoy(
   forzar = false,
   msLimite = MS_LIMITE_CARGA,
 ): Promise<ApiResponse<DiaData>> {
+  // La de ayer no vale: la app pudo quedar abierta de un día para otro.
+  if (guardado && guardadoDel !== hoyTexto()) invalidarRutaDeHoy();
   if (!forzar && guardado) return { ok: true, data: guardado };
   if (!forzar && enVuelo) return enVuelo;
 
   if (!guardado) {
     const disco = leerDeDisco();
-    if (disco) {
-      guardado = disco.data;
-      actualizadoEn = disco.actualizadoEn;
+    // Sin copia de hoy, la que se guardó como ruta próxima (ayer o el
+    // viernes): llegó su día. Con señal se cambia por la del servidor.
+    const copia = disco ? disco.data : rutaDeHoyGuardada();
+    if (copia) {
+      guardado = copia;
+      guardadoDel = hoyTexto();
+      actualizadoEn = disco ? disco.actualizadoEn : 0;
       deDisco = true;
-      if (!forzar) return { ok: true, data: guardado };
+      if (!forzar) return { ok: true, data: copia };
     }
   }
 
@@ -333,6 +356,7 @@ export async function getRutaDeHoy(
     .then((r): ApiResponse<DiaData> => {
       if (r.ok && r.data) {
         guardado = r.data;
+        guardadoDel = hoyTexto();
         actualizadoEn = Date.now();
         deDisco = false;
         escribirEnDisco(r.data, actualizadoEn);
@@ -365,6 +389,7 @@ export function rutaDeHoyEnCache(): DiaData | null {
 /** Tira la copia. Se llama al actualizar a mano y al guardar una visita. */
 export function invalidarRutaDeHoy() {
   guardado = null;
+  guardadoDel = '';
   enVuelo = null;
   actualizadoEn = 0;
   deDisco = false;

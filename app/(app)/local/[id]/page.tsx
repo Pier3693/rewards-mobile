@@ -19,7 +19,7 @@ import {
   textoParaCopiar,
   type LocalCompleto,
 } from '@/lib/locales';
-import { tituloBonito, telefonoWhatsApp, telefonoLlamada, telefonoLegible, horaDe } from '@/lib/texto';
+import { tituloBonito, telefonoWhatsApp, telefonoLlamada, telefonoLegible, momentoDe } from '@/lib/texto';
 import { separarObservacion } from '@/lib/visita';
 import {
   estadoTemporal,
@@ -199,7 +199,7 @@ export default function LocalPage() {
 
       {copiaDeLas > 0 && (
         <p className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-center text-[12.5px] font-medium text-warn">
-          Sin conexión: datos guardados a las {horaDe(copiaDeLas)}.
+          Sin conexión: datos guardados {momentoDe(copiaDeLas)}.
         </p>
       )}
 

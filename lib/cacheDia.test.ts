@@ -406,7 +406,7 @@ describe('locales del día en el celular', () => {
     assert.equal(r.ok, false);
   });
 
-  test('al guardar se tiran los locales de otros días', () => {
+  test('al guardar se tiran los locales vencidos', () => {
     datos.set(
       'rw_locales_dia',
       JSON.stringify({
@@ -641,5 +641,78 @@ describe('tras guardar una visita, la copia del local la refleja', () => {
     assert.equal(copia?.comercio, 'GMO');
     assert.equal(copia?.codigo_culqi, '222');
     assert.equal(copia?.ultima_visita, '27/10/2026 15:26');
+  });
+});
+
+// ══════════════════════════════════════════════════
+// Rutas de los próximos días: cuando llega su día, son la ruta de hoy.
+describe('la ruta próxima al llegar su día', () => {
+  let datos: Map<string, string>;
+
+  beforeEach(() => {
+    datos = montarNavegador();
+    borrarCacheDelDia();
+    llamadas = 0;
+  });
+  afterEach(() => {
+    globalThis.fetch = fetchReal;
+  });
+
+  function proximaDeHoy() {
+    datos.set(
+      'rw_rutas_proximas',
+      JSON.stringify({ correo: ROSA.correo, guardadoEn: 1000, dias: [{ ...dia([brandingAsics]), fecha: hoy() }] }),
+    );
+  }
+
+  test('sin señal y sin copia de hoy, usa la que se guardó como próxima', async () => {
+    proximaDeHoy();
+    sinSenal();
+    const r = await getRutaDeHoy();
+    assert.equal(r.ok, true);
+    assert.equal(r.data?.pendientes[0].id_asignacion, 'ASG-BRAND');
+    assert.equal(rutaNecesitaRefresco(), true, 'es una copia: se pide la fresca');
+  });
+
+  test('con señal, manda lo que dice el servidor', async () => {
+    proximaDeHoy();
+    backend({ ok: true, data: dia([otroLocal]) });
+    const r = await getRutaDeHoy(true);
+    assert.deepEqual(r.data?.pendientes.map((p) => p.id_asignacion), [otroLocal.id_asignacion]);
+  });
+
+  test('la de otro CAP no se usa', async () => {
+    datos.set(
+      'rw_rutas_proximas',
+      JSON.stringify({ correo: 'otro@empresa.pe', guardadoEn: 1000, dias: [{ ...dia([brandingAsics]), fecha: hoy() }] }),
+    );
+    sinSenal();
+    assert.equal((await getRutaDeHoy()).ok, false);
+  });
+});
+
+describe('copia de los locales: 7 días de respaldo', () => {
+  let datos: Map<string, string>;
+  beforeEach(() => {
+    datos = montarNavegador();
+    borrarCacheDelDia();
+  });
+
+  const guardadaHace = (dias: number) =>
+    datos.set(
+      'rw_locales_dia',
+      JSON.stringify({
+        'PC-0001': { correo: ROSA.correo, fecha: '01/01/2026', guardadoEn: Date.now() - dias * 86_400_000, datos: { comercio: 'Tambo+' } },
+      }),
+    );
+
+  test('una de hace 3 días sirve sin señal (la precargó la ruta de los próximos días)', () => {
+    guardadaHace(3);
+    assert.equal(localDelDiaEnCache<{ comercio: string }>('PC-0001')?.datos.comercio, 'Tambo+');
+  });
+
+  test('una de hace 8 días ya no', () => {
+    guardadaHace(8);
+    assert.equal(localDelDiaEnCache('PC-0001'), null);
   });
 });

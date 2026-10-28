@@ -214,6 +214,19 @@ export function horaDe(ms: number): string {
 }
 
 /**
+ * Cuándo se guardó una copia: "a las 08:12" si fue hoy, y si no
+ * "el 30/10 a las 08:12" (los locales de las rutas próximas se guardan
+ * días antes).
+ */
+export function momentoDe(ms: number, ahora = new Date()): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  const mismoDia =
+    d.getFullYear() === ahora.getFullYear() && d.getMonth() === ahora.getMonth() && d.getDate() === ahora.getDate();
+  return mismoDia ? `a las ${horaDe(ms)}` : `el ${p(d.getDate())}/${p(d.getMonth() + 1)} a las ${horaDe(ms)}`;
+}
+
+/**
  * "hace un momento", "hace 5 min", "hace 2 h" — para decir cuándo se
  * actualizó la ruta. Vacío si nunca.
  */

@@ -29,7 +29,7 @@ import {
   type Motivo,
 } from '@/lib/visita';
 import { ubicacionDe } from '@/lib/ruta';
-import { horaDe } from '@/lib/texto';
+import { momentoDe } from '@/lib/texto';
 import BottomSheet from '@/components/BottomSheet';
 import ErrorDeCarga from '@/components/ErrorDeCarga';
 import MiniaturaFoto from '@/components/MiniaturaFoto';
@@ -123,7 +123,7 @@ export default function HistorialPage() {
 
       {copiaDeLas > 0 && (
         <p className="mb-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-center text-[12.5px] font-medium text-warn">
-          Sin conexión: datos guardados a las {horaDe(copiaDeLas)}.
+          Sin conexión: datos guardados {momentoDe(copiaDeLas)}.
         </p>
       )}
 

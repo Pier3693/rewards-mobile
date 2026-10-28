@@ -36,7 +36,7 @@ import {
   estadoTemporal,
   type Parada,
 } from '@/lib/ruta';
-import { tituloBonito, horaDe } from '@/lib/texto';
+import { tituloBonito, momentoDe } from '@/lib/texto';
 import { clearSession, marcarSesionExpirada, getUsuario } from '@/lib/auth';
 import { colaIndexedDB, esEdicion, nuevaEdicion, nuevaEntrada, PREFIJO_EDICION } from '@/lib/cola';
 import {
@@ -896,7 +896,7 @@ function RegistroVisita() {
 
       {copiaDeLas > 0 && (
         <p className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-[12.5px] font-medium text-warn">
-          Datos del local de las {horaDe(copiaDeLas)}: no se pudieron actualizar.
+          Datos del local guardados {momentoDe(copiaDeLas)}: no se pudieron actualizar.
         </p>
       )}
 

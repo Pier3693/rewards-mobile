@@ -7,6 +7,7 @@ import {
   telefonoWhatsApp,
   telefonoLegible,
   telefonoLlamada,
+  momentoDe,
   numeroLimpio,
   tipoTelefono,
   horaDe,
@@ -221,5 +222,15 @@ describe('horas de actualización', () => {
   // El reloj del celular puede ir adelantado respecto a lo guardado.
   test('una fecha futura no da negativos', () => {
     assert.equal(haceCuanto(Date.now() + 60_000), 'hace un momento');
+  });
+});
+
+describe('momentoDe', () => {
+  const ahora = new Date(2026, 10, 2, 9, 0);
+  test('hoy: solo la hora', () => {
+    assert.equal(momentoDe(new Date(2026, 10, 2, 8, 12).getTime(), ahora), 'a las 08:12');
+  });
+  test('otro día: con la fecha', () => {
+    assert.equal(momentoDe(new Date(2026, 9, 30, 17, 5).getTime(), ahora), 'el 30/10 a las 17:05');
   });
 });
