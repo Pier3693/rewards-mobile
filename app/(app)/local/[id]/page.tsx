@@ -18,7 +18,7 @@ import {
   textoParaCopiar,
   type LocalCompleto,
 } from '@/lib/locales';
-import { tituloBonito, telefonoWhatsApp, telefonoLegible, horaDe } from '@/lib/texto';
+import { tituloBonito, telefonoWhatsApp, telefonoLlamada, telefonoLegible, horaDe } from '@/lib/texto';
 import { separarObservacion } from '@/lib/visita';
 import {
   estadoTemporal,
@@ -170,6 +170,8 @@ export default function LocalPage() {
   const ubicacion = ubicacionDe(local);
 
   const whatsapp = telefonoWhatsApp(local.contacto_cel);
+  // Un fijo se puede llamar, pero no tiene WhatsApp.
+  const llamada = telefonoLlamada(local.contacto_cel);
   const aviso = avisoUltimaVisita(local, ahora);
   const dias = diasDesde(local.ultima_visita, ahora);
 
@@ -218,22 +220,22 @@ export default function LocalPage() {
 
       {/* ── Acciones ── */}
       <div className="mt-5 grid grid-cols-2 gap-2.5">
+        {llamada && (
+          <Accion
+            href={`tel:${llamada}`}
+            icono={<IconPhone />}
+            texto="Llamar"
+            clase="bg-ok-light text-ok"
+          />
+        )}
         {whatsapp && (
-          <>
-            <Accion
-              href={`tel:+${whatsapp}`}
-              icono={<IconPhone />}
-              texto="Llamar"
-              clase="bg-ok-light text-ok"
-            />
-            <Accion
-              href={`https://wa.me/${whatsapp}`}
-              externo
-              icono={<IconWhatsApp />}
-              texto="WhatsApp"
-              clase="bg-ok-light text-ok"
-            />
-          </>
+          <Accion
+            href={`https://wa.me/${whatsapp}`}
+            externo
+            icono={<IconWhatsApp />}
+            texto="WhatsApp"
+            clase="bg-ok-light text-ok"
+          />
         )}
         <Accion
           href={enlaceMapa(local)}

@@ -142,19 +142,27 @@ export const MAX_FOTOS = 4;
 // ══════════════════════════════════════════════════
 
 /**
- * Celular peruano: 9 dígitos que empiezan por 9.
- * El vacío es válido porque el celular no es obligatorio.
+ * Celular o teléfono fijo peruano, sin contar espacios ni guiones:
+ * - celular: 9 dígitos que empiezan por 9 (987654321);
+ * - fijo de Lima: 01 y 7 dígitos (011234567);
+ * - fijo de provincia: 0, el código de área y 6 dígitos, 9 en total
+ *   (044123456). Los códigos van del 41 al 84: basta con 0[2-8] para no
+ *   dejar fuera uno bueno y rechazar el 00 y el 09.
+ * El vacío es válido porque el teléfono no es obligatorio.
  */
-export function celularEsValido(celular: string | undefined): boolean {
-  const limpio = String(celular || '').replace(/\s|-/g, '');
+export function telefonoEsValido(telefono: string | undefined): boolean {
+  const limpio = String(telefono || '').replace(/\s|-/g, '');
   if (!limpio) return true;
-  return /^9\d{8}$/.test(limpio);
+  return /^9\d{8}$/.test(limpio) || /^01\d{7}$/.test(limpio) || /^0[2-8]\d{7}$/.test(limpio);
 }
+
+/** El nombre de antes: el campo sigue llamándose celular en la hoja. */
+export const celularEsValido = telefonoEsValido;
 
 /** El mensaje a mostrar bajo el campo, o vacío si está bien. */
 export function errorCelular(celular: string | undefined): string {
-  if (celularEsValido(celular)) return '';
-  return 'Debe tener 9 dígitos y empezar con 9';
+  if (telefonoEsValido(celular)) return '';
+  return 'Celular de 9 dígitos (9…) o fijo con código (01…)';
 }
 
 // ══════════════════════════════════════════════════

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   celularEsValido,
+  telefonoEsValido,
   errorCelular,
   componerObservacion,
   separarObservacion,
@@ -44,16 +45,35 @@ describe('celular', () => {
     assert.equal(errorCelular(''), '');
   });
 
-  test('rechaza lo que no son 9 dígitos empezando por 9', () => {
+  test('acepta un fijo de Lima: 01 y 7 dígitos', () => {
+    assert.equal(telefonoEsValido('011234567'), true);
+    assert.equal(telefonoEsValido('01 123 4567'), true);
+    assert.equal(telefonoEsValido('01-123-4567'), true);
+  });
+
+  test('acepta un fijo de provincia: 0, código y 6 dígitos', () => {
+    assert.equal(telefonoEsValido('044123456'), true); // Trujillo
+    assert.equal(telefonoEsValido('084123456'), true); // Cusco
+    assert.equal(telefonoEsValido('054 123 456'), true); // Arequipa
+  });
+
+  test('rechaza lo que no es celular ni fijo', () => {
     assert.equal(celularEsValido('98765432'), false); // 8 dígitos
     assert.equal(celularEsValido('9876543210'), false); // 10 dígitos
-    assert.equal(celularEsValido('887654321'), false); // no empieza en 9
+    assert.equal(celularEsValido('887654321'), false); // no empieza en 9 ni en 0
+    assert.equal(celularEsValido('123456789'), false);
     assert.equal(celularEsValido('51987654321'), false); // con prefijo de país
+    assert.equal(telefonoEsValido('01123456'), false); // 01 con 6 dígitos
+    assert.equal(telefonoEsValido('0112345678'), false); // 01 con 8 dígitos
+    assert.equal(telefonoEsValido('04412345'), false); // provincia con 5 dígitos
+    assert.equal(telefonoEsValido('001234567'), false); // no hay código 00
+    assert.equal(telefonoEsValido('091234567'), false); // ni 09
     assert.equal(celularEsValido('anexo 204'), false);
   });
 
-  test('el mensaje de error dice qué falta', () => {
-    assert.equal(errorCelular('12345'), 'Debe tener 9 dígitos y empezar con 9');
+  test('el mensaje de error dice qué se acepta', () => {
+    assert.equal(errorCelular('12345'), 'Celular de 9 dígitos (9…) o fijo con código (01…)');
+    assert.equal(errorCelular('011234567'), '');
   });
 });
 

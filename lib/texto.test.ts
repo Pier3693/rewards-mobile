@@ -6,6 +6,7 @@ import {
   partirPorCoincidencia,
   telefonoWhatsApp,
   telefonoLegible,
+  telefonoLlamada,
   horaDe,
   haceCuanto,
 } from './texto.ts';
@@ -148,6 +149,28 @@ describe('telefonoLegible', () => {
 
   test('si no es valido devuelve lo que habia', () => {
     assert.equal(telefonoLegible('anexo 204'), 'anexo 204');
+  });
+
+  test('un fijo con su código', () => {
+    assert.equal(telefonoLegible('011234567'), '01 123 4567');
+    assert.equal(telefonoLegible('044123456'), '044 123 456');
+  });
+});
+
+describe('telefonoLlamada', () => {
+  test('celular y fijo, con el 51 y sin el 0 del código', () => {
+    assert.equal(telefonoLlamada('987 654 321'), '+51987654321');
+    assert.equal(telefonoLlamada('01 123 4567'), '+5111234567');
+    assert.equal(telefonoLlamada('044123456'), '+5144123456');
+  });
+
+  test('un fijo no tiene WhatsApp', () => {
+    assert.equal(telefonoWhatsApp('011234567'), '');
+  });
+
+  test('lo que no se puede marcar, vacío', () => {
+    assert.equal(telefonoLlamada('12345'), '');
+    assert.equal(telefonoLlamada(''), '');
   });
 });
 

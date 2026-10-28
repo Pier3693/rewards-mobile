@@ -1193,10 +1193,10 @@ function Paso2({
         />
         <CampoTexto
           id="celular"
-          label="Celular"
+          label="Celular o teléfono"
           valor={celular}
-          placeholder="9XXXXXXXX"
-          modo="numeric"
+          placeholder="987654321 o 011234567"
+          modo="tel"
           fallo={errorCelular(celular)}
           onCambio={onCelular}
         />
@@ -1307,7 +1307,7 @@ function CampoTexto({
   label: string;
   valor: string;
   placeholder?: string;
-  modo?: 'numeric';
+  modo?: 'tel';
   fallo?: string;
   onCambio: (v: string) => void;
 }) {

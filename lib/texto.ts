@@ -156,12 +156,34 @@ export function telefonoWhatsApp(celular: string | undefined): string {
   return '51' + sinPais;
 }
 
-/** El mismo número, en formato legible: "987 654 321". */
+/** Un fijo con su código: "011234567" (Lima) o "044123456" (provincia). */
+function fijoDe(telefono: string | undefined): string {
+  const d = String(telefono || '').replace(/\D/g, '');
+  return /^01\d{7}$/.test(d) || /^0[2-8]\d{7}$/.test(d) ? d : '';
+}
+
+/**
+ * Para el enlace tel: "+51987654321", o el fijo sin su 0 ("+5111234567",
+ * "+5144123456"). Vacío si no es un número que se pueda marcar.
+ */
+export function telefonoLlamada(telefono: string | undefined): string {
+  const celular = telefonoWhatsApp(telefono);
+  if (celular) return '+' + celular;
+  const fijo = fijoDe(telefono);
+  return fijo ? '+51' + fijo.slice(1) : '';
+}
+
+/** El mismo número, en formato legible: "987 654 321", "01 123 4567", "044 123 456". */
 export function telefonoLegible(celular: string | undefined): string {
   const normalizado = telefonoWhatsApp(celular);
-  if (!normalizado) return String(celular || '').trim();
-  const n = normalizado.slice(2);
-  return `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
+  if (normalizado) {
+    const n = normalizado.slice(2);
+    return `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
+  }
+  const fijo = fijoDe(celular);
+  if (fijo.startsWith('01')) return `01 ${fijo.slice(2, 5)} ${fijo.slice(5)}`;
+  if (fijo) return `${fijo.slice(0, 3)} ${fijo.slice(3, 6)} ${fijo.slice(6)}`;
+  return String(celular || '').trim();
 }
 
 // ══════════════════════════════════════════════════
