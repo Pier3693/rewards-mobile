@@ -21,7 +21,16 @@ import { buscarVisitaDeHoy } from '@/lib/historial';
 import { useUbicacion } from '@/lib/useUbicacion';
 import { useRutaSugerida } from '@/lib/useRutaSugerida';
 import { separarParadas, textoDistancia } from '@/lib/mapa';
-import { haceCuanto } from '@/lib/texto';
+import { haceCuanto, tituloBonito } from '@/lib/texto';
+import {
+  getRutasProximas,
+  rutasProximasEnCopia,
+  diasDelSelector,
+  tituloDia,
+  textoDisponible,
+} from '@/lib/rutasProximas';
+import { useDiaElegido } from '@/lib/useDiaElegido';
+import SelectorDias from '@/components/SelectorDias';
 import {
   ordenarRuta,
   minutosHasta,
@@ -40,6 +49,8 @@ import {
   siguienteParada,
   saludoPorHora,
   fechaLarga,
+  etiquetaHora,
+  esHoraFlexible,
   type Parada,
 } from '@/lib/ruta';
 import {
@@ -109,6 +120,9 @@ export default function HoyPage() {
   const [actualizadaEn, setActualizadaEn] = useState(0);
   /** Se está pidiendo la ruta fresca mientras se enseña la copia. */
   const [actualizando, setActualizando] = useState(false);
+  /** Las rutas de los próximos días: primero la copia, luego el servidor. */
+  const [proximas, setProximas] = useState<DiaData[]>([]);
+  const [diaElegido, elegirDia] = useDiaElegido();
 
   const cargar = useCallback(async (forzar = false) => {
     setCargando(true);
@@ -133,15 +147,22 @@ export default function HoyPage() {
     }
   }, []);
 
+  /** Los próximos días van por detrás: nunca retrasan la ruta de hoy. */
+  const cargarProximas = useCallback(() => {
+    getRutasProximas().then((r) => setProximas(r.dias));
+  }, []);
+
   /** Vuelve a preguntarle al backend, ignorando la caché. */
   const recargar = useCallback(() => {
     invalidarRutaDeHoy();
-    cargar(true);
-  }, [cargar]);
+    cargar(true).then(cargarProximas);
+  }, [cargar, cargarProximas]);
 
   useEffect(() => {
-    cargar();
-  }, [cargar]);
+    // La copia primero (en el cliente: el servidor no tiene localStorage).
+    setProximas(rutasProximasEnCopia());
+    cargar().then(cargarProximas);
+  }, [cargar, cargarProximas]);
 
   useEffect(() => {
     const t = setInterval(() => setAhora(new Date()), 60_000);
@@ -178,12 +199,17 @@ export default function HoyPage() {
     () => [...new Set(paradasDelDia(data).map((p) => p.id_local || '').filter(Boolean))],
     [data],
   );
+  // Los de los próximos días, después: la precarga va en orden y para al primer fallo.
+  const localesProximos = useMemo(
+    () => proximas.flatMap((d) => paradasDelDia(d).map((p) => p.id_local || '')).filter(Boolean),
+    [proximas],
+  );
 
   // Con señal, se guardan en el celular los locales de la ruta para que
   // el detalle y el registro abran sin conexión.
   useEffect(() => {
     if (!localesDeLaRuta.length || actualizando || navigator.onLine === false) return;
-    precargarLocalesDelDia(localesDeLaRuta);
+    precargarLocalesDelDia([...localesDeLaRuta, ...localesProximos]);
 
     // Y el service worker guarda sus páginas: /local y /visita son
     // dinámicas, así que solo abren sin señal si ya se visitaron o se
@@ -195,7 +221,7 @@ export default function HoyPage() {
         `/visita/${encodeURIComponent(id)}`,
       ]),
     );
-  }, [localesDeLaRuta, actualizando]);
+  }, [localesDeLaRuta, localesProximos, actualizando]);
 
   // Con la ubicación ya permitida, la siguiente es la más cercana según
   // la ruta sugerida (la misma del Mapa). Hoy nunca pide el permiso: si
@@ -206,6 +232,15 @@ export default function HoyPage() {
     return [...s.conUbicacion, ...s.sinUbicacion];
   }, [ruta]);
   const sugerida = useRutaSugerida(enMapa, ubicacion)?.ruta.pasos[0] || null;
+  // Las pestañas, y el día que se mira: si el elegido ya no está (pasó, o
+  // el admin lo vació), se mira hoy.
+  const opcionesDias = useMemo(() => diasDelSelector(ruta.length, proximas, ahora), [ruta.length, proximas, ahora]);
+  const diaFuturo = useMemo(
+    () => (diaElegido ? proximas.find((d) => d.fecha === diaElegido && opcionesDias.some((o) => o.fecha === d.fecha)) || null : null),
+    [diaElegido, proximas, opcionesDias],
+  );
+  const rutaFutura = useMemo(() => (diaFuturo ? ordenarRuta(paradasDelDia(diaFuturo)) : []), [diaFuturo]);
+
   const siguiente = useMemo(() => {
     const porHora = siguienteParada(ruta, ahora);
     // Un Meet que está por empezar va primero: no hay que ir a ningún lado.
@@ -302,8 +337,24 @@ export default function HoyPage() {
         />
       )}
 
+      {!cargando && opcionesDias.length > 0 && (
+        <SelectorDias
+          opciones={opcionesDias}
+          elegido={diaFuturo ? diaFuturo.fecha : opcionesDias[0].fecha}
+          onElegir={(o) => elegirDia(o.esHoy ? '' : o.fecha)}
+          className="-mx-5 mb-4 px-5"
+        />
+      )}
+
       {cargando ? (
         <Esqueleto />
+      ) : diaFuturo ? (
+        <DiaFuturo
+          fecha={diaFuturo.fecha}
+          ruta={rutaFutura}
+          ahora={ahora}
+          onTap={abrirParada}
+        />
       ) : error ? (
         <div className="card p-6 text-center">
           <p className="text-sm font-medium text-err">{error}</p>
@@ -678,20 +729,28 @@ function Fila({
   onTap,
   onEditar,
   buscando,
+  disponible,
 }: {
   p: Parada;
   ahora: Date;
   ultima: boolean;
   onTap: () => void;
   /** Corregir la visita de una parada ya hecha. */
-  onEditar: () => void;
-  buscando: boolean;
+  onEditar?: () => void;
+  buscando?: boolean;
+  /**
+   * Un día que viene: solo se mira. "Disponible el lunes" en lugar de
+   * registrar, unirse o editar, y la hora tal cual (sin "Atrasada").
+   */
+  disponible?: string;
 }) {
-  const hecha = estaCompletada(p);
+  const futuro = !!disponible;
+  const hecha = !futuro && estaCompletada(p);
   const resultado = resultadoDe(p);
-  const meet = enlaceMeet(p);
+  const meet = futuro ? '' : enlaceMeet(p);
   const urgente = !hecha && tieneMeet(p) && meetEsUrgente(p, ahora);
-  const estado = estadoTemporal(p, ahora);
+  const estado = futuro ? (esHoraFlexible(p) ? 'flexible' : 'programada') : estadoTemporal(p, ahora);
+  const datosLocal = futuro ? [tituloBonito(p.kam || ''), p.beneficios || ''].filter(Boolean).join(' · ') : '';
 
   const punto = hecha
     ? RESULTADO_PUNTO[resultado] || 'bg-ink-2'
@@ -730,7 +789,7 @@ function Fila({
                     : 'text-ink-2'
                 }`}
               >
-                {textoEstado(p, ahora)}
+                {futuro ? etiquetaHora(p) : textoEstado(p, ahora)}
               </span>
             )}
           </div>
@@ -738,6 +797,7 @@ function Fila({
           <p className="mt-0.5 truncate text-[12.5px] text-ink-2">
             {ubicacionDe(p)}
           </p>
+          {datosLocal && <p className="mt-0.5 truncate text-[12px] text-ink-2">{datosLocal}</p>}
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <ChipMotivo motivo={p.motivo} />
@@ -761,8 +821,15 @@ function Fila({
           </div>
         </button>
 
+        {futuro && (
+          <p className="mt-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-2">
+            <IconCalendar className="h-3.5 w-3.5" />
+            {disponible}
+          </p>
+        )}
+
         {/* Fuera del botón de la tarjeta: un botón no va dentro de otro. */}
-        {hecha && p.id_local && (
+        {hecha && p.id_local && onEditar && (
           <button
             onClick={onEditar}
             disabled={buscando}
@@ -790,6 +857,53 @@ function Fila({
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * Un día que viene: el resumen en lugar del avance y de "Siguiente
+ * visita", y la ruta de solo lectura. El detalle del local sí se abre.
+ */
+function DiaFuturo({
+  fecha,
+  ruta,
+  ahora,
+  onTap,
+}: {
+  fecha: string;
+  ruta: Parada[];
+  ahora: Date;
+  onTap: (p: Parada) => void;
+}) {
+  const disponible = textoDisponible(fecha, ahora);
+  return (
+    <section aria-label={`Ruta del ${tituloDia(fecha)}`}>
+      <div className="card flex items-center gap-3 p-4">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-light text-primary">
+          <IconCalendar className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="font-bold leading-tight">
+            {tituloDia(fecha)} · {ruta.length} {ruta.length === 1 ? 'parada' : 'paradas'}
+          </p>
+          <p className="mt-0.5 text-[12.5px] text-ink-2">Solo para consultar. {disponible} para registrar.</p>
+        </div>
+      </div>
+
+      <h2 className="mb-3 mt-6 text-[11px] font-bold uppercase tracking-wider text-ink-2">Ruta del día</h2>
+      <ol className="relative">
+        {ruta.map((p, i) => (
+          <Fila
+            key={p.id_asignacion || `${p.id_local}-${i}`}
+            p={p}
+            ahora={ahora}
+            ultima={i === ruta.length - 1}
+            onTap={() => onTap(p)}
+            disponible={disponible}
+          />
+        ))}
+      </ol>
+    </section>
   );
 }
 
