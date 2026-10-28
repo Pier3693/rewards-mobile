@@ -89,12 +89,19 @@ export function distanciaMetros(a: Coordenadas, b: Coordenadas): number {
   return 2 * RADIO_TIERRA_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** "a 80 m", "a 350 m", "a 1.2 km", "a 12 km". */
-export function textoDistancia(metros: number): string {
+/** "80 m", "350 m", "1.2 km", "12.4 km": metros hasta 1 km y luego km con un decimal. */
+export function textoMetros(metros: number): string {
   if (!Number.isFinite(metros) || metros < 0) return '';
-  if (metros < 1000) return `a ${Math.max(10, Math.round(metros / 10) * 10)} m`;
-  if (metros < 10_000) return `a ${(metros / 1000).toFixed(1)} km`;
-  return `a ${Math.round(metros / 1000)} km`;
+  // Se redondea antes de elegir: 999 m serían "1000 m".
+  const redondeo = Math.round(metros / 10) * 10;
+  if (redondeo < 1000) return `${Math.max(10, redondeo)} m`;
+  return `${(metros / 1000).toFixed(1)} km`;
+}
+
+/** "a 80 m", "a 350 m", "a 1.2 km", "a 12.4 km". */
+export function textoDistancia(metros: number): string {
+  const t = textoMetros(metros);
+  return t ? `a ${t}` : '';
 }
 
 // ── Encuadre ──────────────────────────────────────

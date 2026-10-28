@@ -25,6 +25,8 @@ import {
   estiloMarcador,
   infoHoja,
   enlaceComoLlegar,
+  textoDistancia,
+  textoMetros,
   CENTRO_LIMA,
   type ParadaEnMapa,
   type GrupoEnMapa,
@@ -34,6 +36,9 @@ import {
 import { useCola } from '@/lib/useCola';
 import { useConexion } from '@/lib/useConexion';
 import { useUbicacion } from '@/lib/useUbicacion';
+import { useRutaSugerida } from '@/lib/useRutaSugerida';
+import { numerosSugeridos, type Lugar, type RutaSugerida } from '@/lib/rutaSugerida';
+import { etiquetaHora } from '@/lib/ruta';
 import { plataformaDe } from '@/lib/instalacion';
 import { MOTIVO_CLS, type Motivo } from '@/lib/visita';
 import BottomSheet from '@/components/BottomSheet';
@@ -49,7 +54,9 @@ function htmlMarcador(e: EstiloMarcador): string {
     .join(' ');
   const contenido = e.hecha
     ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
-    : String(e.numero);
+    : e.numero
+      ? String(e.numero)
+      : '';
   return `<span class="${clases}" style="--marcador:${e.color}">${contenido}</span>`;
 }
 
@@ -62,8 +69,11 @@ const SVG_CAPAS =
  * así no se confunde con el número de una parada. El nombre accesible lo
  * pone el marcador ("3 paradas").
  */
-function htmlGrupo(g: GrupoEnMapa): string {
-  return `<span class="marcador marcador--grupo" aria-hidden="true">${SVG_CAPAS}<span>${g.paradas.length}</span></span>`;
+function htmlGrupo(g: GrupoEnMapa, numeroEnOrden = 0): string {
+  // Con la ruta sugerida, un grupo que es un solo lugar del orden (un
+  // mall) lleva su número del orden: las capas dicen que son varios locales.
+  const texto = numeroEnOrden || g.paradas.length;
+  return `<span class="marcador marcador--grupo" aria-hidden="true">${SVG_CAPAS}<span>${texto}</span></span>`;
 }
 
 /** Zoom desde el que tocar un grupo ya no acerca más: lista sus paradas. */
@@ -73,6 +83,13 @@ interface Lista {
   titulo: string;
   subtitulo: string;
   paradas: ParadaEnMapa[];
+}
+
+/** El nombre de un lugar del orden: el comercio, o el mall si son varios. */
+function nombreLugar(l: Lugar): string {
+  const primera = l.paradas[0].parada;
+  if (l.paradas.length === 1) return primera.comercio;
+  return infoHoja(primera).mall || `${l.paradas.length} locales`;
 }
 
 function instruccionesUbicacion(): string {
@@ -99,11 +116,14 @@ export default function MapaRuta() {
   const [zoom, setZoom] = useState(12);
   const [mosaicosFallan, setMosaicosFallan] = useState(false);
   const [avisoUbicacionCerrado, setAvisoUbicacionCerrado] = useState(false);
+  /** La hoja con el orden sugerido completo. */
+  const [verOrden, setVerOrden] = useState(false);
 
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
   const capaPuntos = useRef<L.LayerGroup | null>(null);
   const capaCap = useRef<{ punto: L.Marker; precision: L.Circle } | null>(null);
+  const capaLinea = useRef<L.Polyline | null>(null);
   /** Si el CAP ya movió el mapa, no se le vuelve a encuadrar solo. */
   const movido = useRef(false);
   const encuadradoConUbicacion = useRef(false);
@@ -123,6 +143,16 @@ export default function MapaRuta() {
   const todas = useMemo(
     () => [...paradas.conUbicacion, ...paradas.sinUbicacion].sort((a, b) => a.numero - b.numero),
     [paradas],
+  );
+
+  // ── Ruta sugerida: con la ubicación, por cercanía; si no, null ──
+  const sugerencia = useRutaSugerida(todas, ubicacion);
+  const ruta = sugerencia?.ruta || null;
+  const numeros = useMemo(() => (ruta ? numerosSugeridos(ruta) : null), [ruta]);
+  /** El número que se ve: el del orden sugerido, o el de la ruta sin ubicación. */
+  const numeroDe = useCallback(
+    (p: ParadaEnMapa) => (numeros ? numeros.get(p.numero) || 0 : p.numero),
+    [numeros],
   );
 
   // ── El mapa ──
@@ -161,7 +191,7 @@ export default function MapaRuta() {
       if (!e) return;
       if (e.tipo === 'centro') m.setView([e.centro.lat, e.centro.lng], e.zoom);
       // Más margen arriba: ahí van el título y los avisos.
-      else m.fitBounds(e.limites, { paddingTopLeft: [48, 230], paddingBottomRight: [48, 72], maxZoom: 16 });
+      else m.fitBounds(e.limites, { paddingTopLeft: [48, 230], paddingBottomRight: [48, 170], maxZoom: 16 });
     },
     [paradas, ubicacion],
   );
@@ -195,10 +225,20 @@ export default function MapaRuta() {
     capa.clearLayers();
     for (const g of agruparParadas(paradas.conUbicacion, zoom)) {
       if (g.paradas.length > 1) {
-        const nombre = `${g.paradas.length} paradas`;
+        // ¿Es un solo lugar del orden sugerido? Entonces todas llevan el mismo número.
+        const enOrden = numeros ? new Set(g.paradas.map(numeroDe)) : null;
+        const numeroEnOrden = enOrden && enOrden.size === 1 ? [...enOrden][0] : 0;
+        const nombre = numeroEnOrden
+          ? `Parada ${numeroEnOrden} · ${g.paradas.length} locales`
+          : `${g.paradas.length} paradas`;
         const grupo = L.marker([g.centro.lat, g.centro.lng], {
           // Zona tocable de 64×44 alrededor de la píldora.
-          icon: L.divIcon({ className: 'marcador-mapa', html: htmlGrupo(g), iconSize: [64, 44], iconAnchor: [32, 22] }),
+          icon: L.divIcon({
+            className: 'marcador-mapa',
+            html: htmlGrupo(g, numeroEnOrden),
+            iconSize: [64, 44],
+            iconAnchor: [32, 22],
+          }),
           title: nombre,
           keyboard: true,
           zIndexOffset: 800,
@@ -209,11 +249,12 @@ export default function MapaRuta() {
         continue;
       }
       const p = g.paradas[0];
-      const estilo = estiloMarcador(p);
+      const estilo = { ...estiloMarcador(p), numero: numeroDe(p) };
+      const nombre = estilo.numero ? `${estilo.numero}. ${p.parada.comercio}` : p.parada.comercio;
       L.marker([p.coordenadas!.lat, p.coordenadas!.lng], {
         icon: L.divIcon({ className: 'marcador-mapa', html: htmlMarcador(estilo), iconSize: [44, 44], iconAnchor: [22, 22] }),
-        title: `${p.numero}. ${p.parada.comercio}`,
-        alt: `${p.numero}. ${p.parada.comercio}`,
+        title: nombre,
+        alt: nombre,
         keyboard: true,
         // Las pendientes por encima de las hechas.
         zIndexOffset: estilo.hecha ? 0 : 500,
@@ -221,7 +262,27 @@ export default function MapaRuta() {
         .on('click', () => setAbierta(p))
         .addTo(capa);
     }
-  }, [paradas, zoom, tocarGrupo]);
+  }, [paradas, zoom, tocarGrupo, numeroDe, numeros]);
+
+  // La línea punteada del recorrido sugerido, desde donde se calculó.
+  useEffect(() => {
+    const m = mapa.current;
+    capaLinea.current?.remove();
+    capaLinea.current = null;
+    if (!m || !sugerencia || !sugerencia.ruta.pasos.length) return;
+    const puntos: L.LatLngExpression[] = [
+      [sugerencia.origen.lat, sugerencia.origen.lng],
+      ...sugerencia.ruta.pasos.map((p): L.LatLngExpression => [p.lugar.centro.lat, p.lugar.centro.lng]),
+    ];
+    capaLinea.current = L.polyline(puntos, {
+      className: 'linea-ruta',
+      interactive: false,
+      dashArray: '4 8',
+      weight: 3,
+    }).addTo(m);
+    // Debajo de los marcadores, que van en su propio panel.
+    capaLinea.current.bringToBack();
+  }, [sugerencia]);
 
   // Al abrir: encuadrar las paradas en cuanto están.
   const encuadradoInicial = useRef(false);
@@ -382,22 +443,23 @@ export default function MapaRuta() {
         </div>
       </div>
 
-      {/* ── Abajo, sobre la barra: las que no tienen ubicación ── */}
-      {paradas.sinUbicacion.length > 0 && (
-        <div className="mapa-abajo fixed left-4 z-10">
-          <button
-            onClick={() =>
-              setLista({
-                titulo: 'Sin ubicación en el mapa',
-                subtitulo: 'Estas paradas no tienen coordenadas todavía',
-                paradas: paradas.sinUbicacion,
-              })
-            }
-            className="card min-h-11 px-3.5 text-left text-[12.5px] font-semibold shadow-lg"
-          >
-            {paradas.sinUbicacion.length} {paradas.sinUbicacion.length === 1 ? 'visita' : 'visitas'} sin ubicación en el mapa
-          </button>
-        </div>
+      {/* ── Abajo, sobre la barra: la ruta sugerida, o la invitación a activarla ── */}
+      {!cargando && (
+        <TarjetaRuta
+          ruta={ruta}
+          estadoUbicacion={estadoUbicacion}
+          hayPendientes={paradas.conUbicacion.some((p) => !estiloMarcador(p).hecha)}
+          sinUbicacion={paradas.sinUbicacion.length}
+          onActivar={empezar}
+          onVerOrden={() => setVerOrden(true)}
+          onSinUbicacion={() =>
+            setLista({
+              titulo: 'Sin ubicación en el mapa',
+              subtitulo: 'Estas paradas no tienen coordenadas todavía',
+              paradas: paradas.sinUbicacion,
+            })
+          }
+        />
       )}
 
       {/* ── Lista de paradas: sin ubicación, las de un grupo, o todas como respaldo ── */}
@@ -417,7 +479,7 @@ export default function MapaRuta() {
                     className="marcador marcador--lista shrink-0"
                     style={{ ['--marcador' as string]: estiloMarcador(p).color }}
                   >
-                    {estiloMarcador(p).hecha ? <IconCheck className="h-3.5 w-3.5" /> : p.numero}
+                    {estiloMarcador(p).hecha ? <IconCheck className="h-3.5 w-3.5" /> : numeroDe(p) || '·'}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-semibold">{p.parada.comercio}</span>
@@ -432,11 +494,95 @@ export default function MapaRuta() {
         </BottomSheet>
       )}
 
+      {/* ── El orden sugerido completo ── */}
+      {verOrden && ruta && (
+        <BottomSheet
+          titulo="Orden sugerido"
+          subtitulo={`Por cercanía · total aprox. ${textoMetros(ruta.totalMetros)}`}
+          onClose={() => setVerOrden(false)}
+        >
+          {ruta.aviso && (
+            <p className="mb-2 rounded-xl bg-warn-light px-3.5 py-2 text-[13px] font-semibold text-warn-boton">{ruta.aviso}</p>
+          )}
+          <ol className="divide-y divide-line">
+            {ruta.pasos.map((paso, i) => {
+              const primera = paso.lugar.paradas[0];
+              const varios = paso.lugar.paradas.length > 1;
+              return (
+                <li key={primera.parada.id_asignacion || primera.numero}>
+                  <button
+                    onClick={() => {
+                      setVerOrden(false);
+                      if (varios) {
+                        setLista({
+                          titulo: nombreLugar(paso.lugar),
+                          subtitulo: 'Elige una para ver su detalle',
+                          paradas: paso.lugar.paradas,
+                        });
+                      } else setAbierta(primera);
+                    }}
+                    className="flex min-h-14 w-full items-center gap-3 py-2 text-left"
+                  >
+                    <span
+                      className="marcador marcador--lista shrink-0"
+                      style={{ ['--marcador' as string]: estiloMarcador(primera).color }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-semibold">{nombreLugar(paso.lugar)}</span>
+                      <span className="block truncate text-[12px] text-ink-2">
+                        {[
+                          varios ? paso.lugar.paradas.map((p) => p.parada.comercio).join(', ') : '',
+                          paso.lugar.ancla ? `Capacitación ${etiquetaHora(primera.parada)}` : etiquetaHora(primera.parada),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right text-[12px] text-ink-2">
+                      {i === 0 ? 'desde ti' : 'luego'}
+                      <span className="block font-semibold text-ink">{textoMetros(paso.metrosDesdeAnterior)}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          {ruta.sinUbicacion.length > 0 && (
+            <>
+              <h3 className="mb-1 mt-4 text-[11px] font-bold uppercase tracking-wider text-ink-2">Sin ubicación</h3>
+              <ul className="divide-y divide-line">
+                {ruta.sinUbicacion.map((p) => (
+                  <li key={p.parada.id_asignacion || p.numero}>
+                    <button
+                      onClick={() => {
+                        setVerOrden(false);
+                        setAbierta(p);
+                      }}
+                      className="flex min-h-12 w-full items-center gap-3 py-2 text-left"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{p.parada.comercio}</span>
+                      <span className="shrink-0 text-[12px] text-ink-2">Sin ubicación</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="mt-4 text-[12px] text-ink-2">
+            Distancias en línea recta, como referencia: el recorrido por calles es algo mayor.
+          </p>
+        </BottomSheet>
+      )}
+
       {/* ── Hoja de una parada ── */}
       {abierta && hoja && (
         <BottomSheet
           titulo={hoja.titulo}
-          subtitulo={[`Parada ${abierta.numero}`, hoja.hora, hoja.distancia].filter(Boolean).join(' · ')}
+          subtitulo={[numeroDe(abierta) ? `Parada ${numeroDe(abierta)}` : '', hoja.hora, hoja.distancia]
+            .filter(Boolean)
+            .join(' · ')}
           onClose={() => setAbierta(null)}
         >
           <div className="flex flex-wrap items-center gap-1.5">
@@ -506,6 +652,92 @@ export default function MapaRuta() {
         </BottomSheet>
       )}
     </div>
+  );
+}
+
+/**
+ * La tarjeta de abajo. Con la ruta sugerida: por dónde empezar, a qué
+ * distancia, y el aviso de la próxima capacitación. Sin ubicación: la
+ * invitación a activarla. aria-live: el lector de pantalla anuncia
+ * cuando cambia la primera parada.
+ */
+function TarjetaRuta({
+  ruta,
+  estadoUbicacion,
+  hayPendientes,
+  sinUbicacion,
+  onActivar,
+  onVerOrden,
+  onSinUbicacion,
+}: {
+  ruta: RutaSugerida | null;
+  estadoUbicacion: ReturnType<typeof useUbicacion>['estado'];
+  hayPendientes: boolean;
+  /** Sin la ruta sugerida, las que no tienen coordenadas se listan desde aquí. */
+  sinUbicacion: number;
+  onActivar: () => void;
+  onVerOrden: () => void;
+  onSinUbicacion: () => void;
+}) {
+  const primero = ruta?.pasos[0];
+  if (!hayPendientes && !primero && !sinUbicacion) return null;
+
+  return (
+    <section
+      aria-label="Ruta sugerida"
+      aria-live="polite"
+      className="mapa-abajo fixed inset-x-4 z-10 mx-auto max-w-md"
+    >
+      <div className="card p-3.5 shadow-lg">
+        {primero ? (
+          <>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink-2">Empieza por</p>
+            <p className="mt-0.5 flex min-w-0 items-baseline gap-1.5">
+              <span className="truncate text-[15px] font-bold">{nombreLugar(primero.lugar)}</span>
+              <span className="shrink-0 text-[13px] text-ink-2">· {textoDistancia(primero.metrosDesdeAnterior)}</span>
+            </p>
+            {ruta!.aviso && <p className="mt-1 text-[12.5px] font-semibold text-warn-boton">{ruta!.aviso}</p>}
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <a
+                href={enlaceComoLlegar(primero.lugar.paradas[0].parada)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-primary-light text-[13.5px] font-semibold text-primary"
+              >
+                <IconNavigation className="h-4 w-4" /> Cómo llegar
+              </a>
+              <button
+                onClick={onVerOrden}
+                className="min-h-11 rounded-xl border border-line bg-surface text-[13.5px] font-semibold text-ink"
+              >
+                Ver orden
+              </button>
+            </div>
+          </>
+        ) : estadoUbicacion === 'buscando' || estadoUbicacion === 'comprobando' ? (
+          <p className="text-[13px] text-ink-2">Buscando tu ubicación para sugerirte un orden…</p>
+        ) : estadoUbicacion === 'activa' || !hayPendientes ? (
+          <p className="text-[13px] text-ink-2">Las paradas pendientes no tienen ubicación en el mapa.</p>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="min-w-0 flex-1 text-[13px] font-semibold">Activa tu ubicación para ver el orden sugerido</p>
+            {estadoUbicacion !== 'denegada' && estadoUbicacion !== 'no-disponible' && (
+              <button
+                onClick={onActivar}
+                className="btn-grad min-h-11 shrink-0 rounded-xl px-4 text-[13.5px] font-semibold text-white"
+              >
+                Activar
+              </button>
+            )}
+          </div>
+        )}
+        {!primero && sinUbicacion > 0 && (
+          <button onClick={onSinUbicacion} className="mt-1.5 min-h-11 text-left text-[12.5px] font-semibold text-primary-texto underline">
+            {sinUbicacion} {sinUbicacion === 1 ? 'visita' : 'visitas'} sin ubicación en el mapa
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

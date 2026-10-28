@@ -329,6 +329,13 @@ body {
   bottom: calc(6rem + env(safe-area-inset-bottom));
 }
 
+/* El recorrido sugerido: punteado y suave, para no tapar las calles. */
+.mapa-lienzo .linea-ruta {
+  /* El morado de visita: en oscuro es lavanda y se ve sobre el mapa. */
+  stroke: var(--color-motivo-visita);
+  stroke-opacity: 0.75;
+}
+
 /* Atribución legible en claro y en oscuro. */
 .mapa-lienzo.leaflet-container .leaflet-control-attribution {
   background: var(--color-barra);

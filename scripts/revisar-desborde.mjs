@@ -354,7 +354,13 @@ async function nuevaPestana(cdp, { ancho, alto }, tema) {
 
   const cerrar = () => cdp.send('Target.disposeBrowserContext', { browserContextId });
 
-  return { evaluar, ir, captura, cerrar };
+  /** Ubicación simulada, con el permiso ya concedido (sin el aviso del sistema). */
+  const ubicar = async (latitude, longitude) => {
+    await cdp.send('Browser.grantPermissions', { permissions: ['geolocation'], origin: BASE, browserContextId });
+    await s('Emulation.setGeolocationOverride', { latitude, longitude, accuracy: 20 });
+  };
+
+  return { evaluar, ir, captura, cerrar, ubicar };
 }
 
 // ── Lo que se mide en cada pantalla ──────────────
@@ -609,6 +615,30 @@ const PANTALLAS = [
       await esperar(1200);
     },
   },
+  {
+    // Sin permiso todavía: el mapa como antes y la tarjeta que invita a activarla.
+    nombre: 'mapa-sin-ubicacion',
+    pasos: async (p) => {
+      await p.ir('/login', 500);
+      await p.evaluar(SESION);
+      await p.ir('/mapa', 3000);
+    },
+  },
+  {
+    // Con la ubicación: el orden sugerido, la línea y "Empieza por".
+    nombre: 'mapa-ruta',
+    pasos: async (p) => {
+      await p.ubicar(-12.115, -77.025);
+      await p.ir('/mapa', 3500);
+    },
+  },
+  {
+    nombre: 'mapa-orden',
+    pasos: async (p) => {
+      await p.evaluar(clicPorTexto('Ver orden'));
+      await esperar(900);
+    },
+  },
 ];
 
 /**
@@ -702,7 +732,7 @@ async function main() {
               fallos += problemas.length;
             }
 
-            if (pantalla.nombre === 'mapa') {
+            if (['mapa', 'mapa-sin-ubicacion', 'mapa-ruta'].includes(pantalla.nombre)) {
               const problemas = await p.evaluar(MEDIR_MAPA);
               for (const pr of problemas) console.log(`      ✗ mapa: ${pr}`);
               fallos += problemas.length;

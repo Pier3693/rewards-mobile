@@ -105,7 +105,8 @@ describe('distancia', () => {
     assert.equal(textoDistancia(347), 'a 350 m');
     assert.equal(textoDistancia(4), 'a 10 m');
     assert.equal(textoDistancia(1234), 'a 1.2 km');
-    assert.equal(textoDistancia(12_400), 'a 12 km');
+    assert.equal(textoDistancia(12_400), 'a 12.4 km');
+    assert.equal(textoDistancia(999), 'a 1.0 km');
     assert.equal(textoDistancia(NaN), '');
   });
 });
