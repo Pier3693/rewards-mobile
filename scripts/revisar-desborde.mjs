@@ -125,6 +125,8 @@ const RESPUESTAS = {
         parada('ASG-3', 'CC-0003', {
           motivo: 'Branding',
           hora: '15:00',
+          hora_fin: '16:30',
+          estado: 'rango',
           mall_puerta: 'Puerta Calle',
           direccion: 'Cal. Libertad Nro. 130 (1Er Piso)',
           lat: -12.0886,

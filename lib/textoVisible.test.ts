@@ -4,7 +4,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 // ══════════════════════════════════════════════════
-//  En pantalla va el guion normal "-", nunca el largo.
+//  En pantalla va el guion normal "-", nunca el largo
+//  ni el medio.
 //
 //  Se revisa el código sin sus comentarios: lo que queda
 //  son textos y JSX, que es lo que el CAP puede ver. Los
@@ -12,6 +13,8 @@ import { join, relative } from 'node:path';
 // ══════════════════════════════════════════════════
 
 const GUION_LARGO = '—';
+const GUION_MEDIO = '–';
+const NOMBRE: Record<string, string> = { [GUION_LARGO]: 'guion largo', [GUION_MEDIO]: 'guion medio' };
 
 /**
  * El código sin comentarios, con las líneas en su sitio para poder decir
@@ -27,11 +30,15 @@ export function sinComentarios(codigo: string): string {
     .join('\n');
 }
 
-/** "archivo:línea" de cada guion largo fuera de comentarios. */
-function guionesLargos(nombre: string, codigo: string): string[] {
+/** "archivo:línea (guion largo)" de cada guion largo o medio fuera de comentarios. */
+function guionesProhibidos(nombre: string, codigo: string): string[] {
   return sinComentarios(codigo)
     .split('\n')
-    .flatMap((l, i) => (l.includes(GUION_LARGO) ? [`${nombre}:${i + 1}  ${l.trim()}`] : []));
+    .flatMap((l, i) =>
+      [GUION_LARGO, GUION_MEDIO]
+        .filter((g) => l.includes(g))
+        .map((g) => `${nombre}:${i + 1} (${NOMBRE[g]})  ${l.trim()}`),
+    );
 }
 
 function archivos(carpeta: string): string[] {
@@ -47,31 +54,38 @@ function archivos(carpeta: string): string[] {
   return salida;
 }
 
-describe('guion largo en pantalla', () => {
-  test('no aparece en app/, components/ ni lib/', () => {
+describe('guion largo y medio en pantalla', () => {
+  test('no aparecen en app/, components/ ni lib/', () => {
     const encontrados = ['app', 'components', 'lib']
       .flatMap(archivos)
-      .flatMap((ruta) => guionesLargos(relative(process.cwd(), ruta), readFileSync(ruta, 'utf8')));
-    assert.deepEqual(encontrados, [], 'Usa "-" en lugar del guion largo:\n' + encontrados.join('\n'));
+      .flatMap((ruta) => guionesProhibidos(relative(process.cwd(), ruta), readFileSync(ruta, 'utf8')));
+    assert.deepEqual(encontrados, [], 'Usa "-" en su lugar:\n' + encontrados.join('\n'));
   });
 
   test('ni en el manifest', () => {
     const manifest = readFileSync(join(process.cwd(), 'public', 'manifest.json'), 'utf8');
     assert.ok(!manifest.includes(GUION_LARGO));
+    assert.ok(!manifest.includes(GUION_MEDIO));
   });
 
-  // Que la revisión de arriba de verdad lo encuentre.
-  test('lo detecta en un texto y lo deja pasar en un comentario', () => {
-    assert.equal(guionesLargos('x.tsx', `const a = 'Hoy ${GUION_LARGO} 5 paradas';`).length, 1);
-    assert.equal(guionesLargos('x.tsx', `<p>{v || '${GUION_LARGO}'}</p>`).length, 1);
-    assert.equal(guionesLargos('x.ts', `// a ${GUION_LARGO} b\nconst a = 1; // c ${GUION_LARGO} d`).length, 0);
-    assert.equal(guionesLargos('x.tsx', `/* a ${GUION_LARGO}\n b */ {/* c ${GUION_LARGO} */}`).length, 0);
-    assert.equal(guionesLargos('x.js', `// a ${GUION_LARGO} b\r\nconst a = 1;\r\n`).length, 0);
-    // "https://" no se toma por un comentario.
-    assert.equal(guionesLargos('x.ts', `const u = 'https://x.pe ${GUION_LARGO} y';`).length, 1);
-  });
+  // Que la revisión de arriba de verdad los encuentre.
+  for (const g of [GUION_LARGO, GUION_MEDIO]) {
+    test(`detecta el ${NOMBRE[g]} en un texto y lo deja pasar en un comentario`, () => {
+      assert.equal(guionesProhibidos('x.tsx', `const a = 'Hoy ${g} 5 paradas';`).length, 1);
+      assert.equal(guionesProhibidos('x.tsx', `<p>{v || '${g}'}</p>`).length, 1);
+      assert.equal(guionesProhibidos('x.ts', 'return `${inicio}' + g + '${fin}`;').length, 1);
+      assert.equal(guionesProhibidos('x.ts', `// a ${g} b\nconst a = 1; // c ${g} d`).length, 0);
+      assert.equal(guionesProhibidos('x.tsx', `/* a ${g}\n b */ {/* c ${g} */}`).length, 0);
+      assert.equal(guionesProhibidos('x.js', `// a ${g} b\r\nconst a = 1;\r\n`).length, 0);
+      // "https://" no se toma por un comentario.
+      assert.equal(guionesProhibidos('x.ts', `const u = 'https://x.pe ${g} y';`).length, 1);
+    });
+  }
 
-  test('las líneas siguen en su sitio tras quitar un bloque', () => {
-    assert.equal(guionesLargos('x.ts', `/*\n\n*/\nconst a = '${GUION_LARGO}';`)[0].split('  ')[0], 'x.ts:4');
+  test('dice cuál apareció y en qué línea, aunque se quite un bloque', () => {
+    assert.deepEqual(
+      guionesProhibidos('x.ts', `/*\n\n*/\nconst a = '${GUION_MEDIO}';`).map((e) => e.split('  ')[0]),
+      ['x.ts:4 (guion medio)'],
+    );
   });
 });

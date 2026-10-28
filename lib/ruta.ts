@@ -139,12 +139,12 @@ export function textoEspera(minutos: number | null): string {
   return m ? `en ${h} h ${m} min` : `en ${h} h`;
 }
 
-/** Etiqueta de hora para la lista: "09:00", "09:00 – 11:00" o "Hora flexible". */
+/** Etiqueta de hora para la lista: "09:00", "09:00 - 11:00" o "Hora flexible". */
 export function etiquetaHora(p: Parada): string {
   if (esHoraFlexible(p)) return 'Hora flexible';
   const inicio = horaNormalizada(p.hora);
   const fin = horaNormalizada(p.hora_fin);
-  if (p.estado === 'rango' && fin) return `${inicio} – ${fin}`;
+  if (p.estado === 'rango' && fin) return `${inicio} - ${fin}`;
   return inicio;
 }
 
@@ -369,7 +369,7 @@ export function textoEstado(p: Parada, ahora = new Date()): string {
     const inicio = horaAMinutos(p.hora);
     const rango =
       fin !== null && inicio !== null && fin > inicio
-        ? `${horaNormalizada(p.hora)}–${horaNormalizada(p.hora_fin)}`
+        ? `${horaNormalizada(p.hora)} - ${horaNormalizada(p.hora_fin)}`
         : horaNormalizada(p.hora);
     return `En curso · ${rango}`;
   }

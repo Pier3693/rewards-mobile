@@ -164,7 +164,7 @@ describe('coherencia entre el estado y el botón de la reunión', () => {
 describe('textoEstado', () => {
   test('el rango solo sale si hora_fin es un dato real', () => {
     const conFin = parada({ motivo: VIRTUAL, hora: '15:00', hora_fin: '16:30' });
-    assert.equal(textoEstado(conFin, alas(15, 30)), 'En curso · 15:00–16:30');
+    assert.equal(textoEstado(conFin, alas(15, 30)), 'En curso · 15:00 - 16:30');
 
     const sinFin = parada({ motivo: VIRTUAL, hora: '15:00' });
     assert.equal(textoEstado(sinFin, alas(15, 30)), 'En curso · 15:00');
@@ -355,7 +355,7 @@ describe('varios', () => {
   test('etiquetaHora', () => {
     assert.equal(
       etiquetaHora(parada({ hora: '09:00', hora_fin: '11:00', estado: 'rango' })),
-      '09:00 – 11:00',
+      '09:00 - 11:00',
     );
     assert.equal(etiquetaHora(parada({ estado: 'flexible' })), 'Hora flexible');
     assert.equal(etiquetaHora(parada({ hora: '09:00' })), '09:00');
