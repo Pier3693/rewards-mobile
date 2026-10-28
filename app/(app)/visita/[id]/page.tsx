@@ -1385,7 +1385,6 @@ function Paso2({
         <CampoTexto
           id="contacto"
           label="Personal que atendió"
-          opcional
           valor={contacto}
           placeholder="¿Quién te atendió?"
           onCambio={onContacto}
