@@ -471,7 +471,8 @@ const borrador = (paso) => `(() => {
     status: 'Incidencia',
     tipoIncidencia: 'Falta material POP',
     contacto: 'Rosa María Fernández de los Santos',
-    celular: '987654321',
+    // Ni celular ni fijo: el aviso ámbar, que no impide seguir.
+    celular: '(01)76655945',
     // Formatos viejos: los cuatro procesadores, uno que no es de la lista
     // y un Otro largo, para ver los chips y todos los códigos a la vez.
     procesador: 'NI, op / Izipay, PagoEfectivoConUnNombreMuyLargoSinEspacios',

@@ -58,8 +58,7 @@ import {
   MOTIVO_CLS,
   TIPOS_INCIDENCIA,
   MAX_FOTOS,
-  errorCelular,
-  celularEsValido,
+  avisoTelefono,
   componerObservacion,
   separarObservacion,
   normalizarStatus,
@@ -645,9 +644,6 @@ function RegistroVisita() {
     if (paso === 1) {
       const fallo = validarPaso1();
       if (fallo) return setError(fallo);
-    }
-    if (paso === 2 && !celularEsValido(celular)) {
-      return setError('Revisa el celular antes de continuar');
     }
     setError('');
     setPaso((p) => Math.min(3, p + 1));
@@ -1389,6 +1385,7 @@ function Paso2({
         <CampoTexto
           id="contacto"
           label="Personal que atendió"
+          opcional
           valor={contacto}
           placeholder="¿Quién te atendió?"
           onCambio={onContacto}
@@ -1396,10 +1393,12 @@ function Paso2({
         <CampoTexto
           id="celular"
           label="Celular o teléfono"
+          opcional
           valor={celular}
           placeholder="987654321 o 011234567"
           modo="tel"
-          fallo={errorCelular(celular)}
+          // Un número raro avisa, pero no impide seguir: se guarda tal cual.
+          aviso={avisoTelefono(celular)}
           onCambio={onCelular}
         />
 
@@ -1503,6 +1502,8 @@ function CampoTexto({
   placeholder,
   modo,
   fallo = '',
+  aviso = '',
+  opcional = false,
   onCambio,
 }: {
   id: string;
@@ -1511,12 +1512,16 @@ function CampoTexto({
   placeholder?: string;
   modo?: 'tel';
   fallo?: string;
+  /** En ámbar: algo que conviene revisar, pero que no impide seguir. */
+  aviso?: string;
+  opcional?: boolean;
   onCambio: (v: string) => void;
 }) {
   return (
     <div>
       <label htmlFor={id} className={ETIQUETA_CAMPO}>
         {label}
+        {opcional && <span className="font-normal normal-case tracking-normal"> (opcional)</span>}
       </label>
       <input
         id={id}
@@ -1525,14 +1530,27 @@ function CampoTexto({
         placeholder={placeholder}
         inputMode={modo}
         aria-invalid={!!fallo}
+        aria-describedby={fallo || aviso ? `${id}-nota` : undefined}
         className={`w-full rounded-xl border bg-campo px-4 py-3 text-[15px] outline-none focus:ring-4 ${
           fallo
             ? 'border-err focus:border-err focus:ring-err/10'
-            : 'border-line focus:border-primary focus:ring-primary/10'
+            : aviso
+              ? 'border-warn focus:border-warn focus:ring-warn/10'
+              : 'border-line focus:border-primary focus:ring-primary/10'
         }`}
       />
-      {/* El error va junto al campo, no en un bloque al final. */}
-      {fallo && <p className="mt-1 text-[12px] font-medium text-err">{fallo}</p>}
+      {/* El error o el aviso van junto al campo, no en un bloque al final. */}
+      {fallo ? (
+        <p id={`${id}-nota`} className="mt-1 text-[12px] font-medium text-err">
+          {fallo}
+        </p>
+      ) : (
+        aviso && (
+          <p id={`${id}-nota`} className="mt-1 text-[12px] font-medium text-warn-boton">
+            {aviso}
+          </p>
+        )
+      )}
     </div>
   );
 }

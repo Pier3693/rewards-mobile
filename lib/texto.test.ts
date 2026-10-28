@@ -7,6 +7,8 @@ import {
   telefonoWhatsApp,
   telefonoLegible,
   telefonoLlamada,
+  numeroLimpio,
+  tipoTelefono,
   horaDe,
   haceCuanto,
 } from './texto.ts';
@@ -153,15 +155,39 @@ describe('telefonoLegible', () => {
 
   test('un fijo con su código', () => {
     assert.equal(telefonoLegible('011234567'), '01 123 4567');
+    assert.equal(telefonoLegible('(01) 438-7415'), '01 438 7415');
     assert.equal(telefonoLegible('044123456'), '044 123 456');
   });
 });
 
+describe('numeroLimpio y tipoTelefono', () => {
+  test('quita todo lo que no es dígito', () => {
+    assert.equal(numeroLimpio('(01) 438-7415'), '014387415');
+    assert.equal(numeroLimpio('01 438 - 7415'), '014387415');
+    assert.equal(numeroLimpio('963.258.741'), '963258741');
+  });
+
+  test('quita el 51 solo si quedan 11 dígitos', () => {
+    assert.equal(numeroLimpio('+51 963 258 741'), '963258741');
+    assert.equal(numeroLimpio('51963258741'), '963258741');
+    assert.equal(numeroLimpio('514387415'), '514387415');
+  });
+
+  test('celular, fijo o ninguno', () => {
+    assert.equal(tipoTelefono('963 258 741'), 'celular');
+    assert.equal(tipoTelefono('(01) 438-7415'), 'fijo');
+    assert.equal(tipoTelefono('044123456'), 'fijo');
+    assert.equal(tipoTelefono('(01)76655945'), '');
+    assert.equal(tipoTelefono(''), '');
+  });
+});
+
 describe('telefonoLlamada', () => {
-  test('celular y fijo, con el 51 y sin el 0 del código', () => {
-    assert.equal(telefonoLlamada('987 654 321'), '+51987654321');
-    assert.equal(telefonoLlamada('01 123 4567'), '+5111234567');
-    assert.equal(telefonoLlamada('044123456'), '+5144123456');
+  test('el número limpio, solo dígitos', () => {
+    assert.equal(telefonoLlamada('963 258 741'), '963258741');
+    assert.equal(telefonoLlamada('+51 963 258 741'), '963258741');
+    assert.equal(telefonoLlamada('(01) 438-7415'), '014387415');
+    assert.equal(telefonoLlamada('044123456'), '044123456');
   });
 
   test('un fijo no tiene WhatsApp', () => {
@@ -170,6 +196,7 @@ describe('telefonoLlamada', () => {
 
   test('lo que no se puede marcar, vacío', () => {
     assert.equal(telefonoLlamada('12345'), '');
+    assert.equal(telefonoLlamada('(01)76655945'), '');
     assert.equal(telefonoLlamada(''), '');
   });
 });

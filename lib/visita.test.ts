@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   celularEsValido,
   telefonoEsValido,
-  errorCelular,
+  avisoTelefono,
   componerObservacion,
   separarObservacion,
   TIPOS_INCIDENCIA,
@@ -28,52 +28,56 @@ import {
 import { nuevaEntrada } from './cola.ts';
 
 // ══════════════════════════════════════════════════
-describe('celular', () => {
-  test('acepta un celular peruano', () => {
-    assert.equal(celularEsValido('987654321'), true);
-    assert.equal(errorCelular('987654321'), '');
+describe('celular o teléfono', () => {
+  const AVISO = 'Revisa el número: no parece celular ni fijo';
+
+  // Números reales escritos por los CAP: todos se aceptan sin aviso.
+  test('acepta celulares y fijos como los escriben', () => {
+    for (const n of [
+      '(01) 438-7415',
+      '014387415',
+      '01 438 7415',
+      '01 438 - 7415',
+      '963 258 741',
+      '963258741',
+      '+51 963 258 741',
+      '51963258741',
+      '044123456', // Trujillo
+      '084.123.456', // Cusco
+    ]) {
+      assert.equal(telefonoEsValido(n), true, n);
+      assert.equal(avisoTelefono(n), '', n);
+    }
   });
 
-  test('tolera espacios y guiones', () => {
-    assert.equal(celularEsValido('987 654 321'), true);
-    assert.equal(celularEsValido('987-654-321'), true);
+  test('el vacío es válido y no avisa: el teléfono no es obligatorio', () => {
+    for (const n of ['', undefined, '   ']) {
+      assert.equal(telefonoEsValido(n), true);
+      assert.equal(avisoTelefono(n), '');
+    }
   });
 
-  test('el vacío es válido: el celular no es obligatorio', () => {
-    assert.equal(celularEsValido(''), true);
-    assert.equal(celularEsValido(undefined), true);
-    assert.equal(errorCelular(''), '');
+  // Avisan en ámbar, pero el CAP puede seguir: no hay error que bloquee.
+  test('lo que no es celular ni fijo avisa', () => {
+    for (const n of ['(01)76655945', '12345']) {
+      assert.equal(telefonoEsValido(n), false, n);
+      assert.equal(avisoTelefono(n), AVISO, n);
+    }
   });
 
-  test('acepta un fijo de Lima: 01 y 7 dígitos', () => {
-    assert.equal(telefonoEsValido('011234567'), true);
-    assert.equal(telefonoEsValido('01 123 4567'), true);
-    assert.equal(telefonoEsValido('01-123-4567'), true);
-  });
-
-  test('acepta un fijo de provincia: 0, código y 6 dígitos', () => {
-    assert.equal(telefonoEsValido('044123456'), true); // Trujillo
-    assert.equal(telefonoEsValido('084123456'), true); // Cusco
-    assert.equal(telefonoEsValido('054 123 456'), true); // Arequipa
-  });
-
-  test('rechaza lo que no es celular ni fijo', () => {
-    assert.equal(celularEsValido('98765432'), false); // 8 dígitos
-    assert.equal(celularEsValido('9876543210'), false); // 10 dígitos
-    assert.equal(celularEsValido('887654321'), false); // no empieza en 9 ni en 0
-    assert.equal(celularEsValido('123456789'), false);
-    assert.equal(celularEsValido('51987654321'), false); // con prefijo de país
-    assert.equal(telefonoEsValido('01123456'), false); // 01 con 6 dígitos
-    assert.equal(telefonoEsValido('0112345678'), false); // 01 con 8 dígitos
-    assert.equal(telefonoEsValido('04412345'), false); // provincia con 5 dígitos
-    assert.equal(telefonoEsValido('001234567'), false); // no hay código 00
-    assert.equal(telefonoEsValido('091234567'), false); // ni 09
-    assert.equal(celularEsValido('anexo 204'), false);
-  });
-
-  test('el mensaje de error dice qué se acepta', () => {
-    assert.equal(errorCelular('12345'), 'Celular de 9 dígitos (9…) o fijo con código (01…)');
-    assert.equal(errorCelular('011234567'), '');
+  test('otros casos que avisan', () => {
+    for (const n of [
+      '98765432', // 8 dígitos
+      '9876543210', // 10 dígitos
+      '887654321', // no empieza en 9 ni en 0
+      '01123456', // 01 con 6 dígitos
+      '001234567', // no hay código 00
+      '091234567', // ni 09
+      '51887654321', // 51 delante de algo que no es celular ni fijo
+      'anexo 204',
+    ]) {
+      assert.equal(celularEsValido(n), false, n);
+    }
   });
 });
 

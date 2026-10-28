@@ -14,6 +14,7 @@ import {
   type SeleccionBeneficios,
   type MaterialPop,
 } from './datosLocal.ts';
+import { numeroLimpio, tipoTelefono } from './texto.ts';
 
 export type Motivo =
   | 'Visita'
@@ -142,27 +143,24 @@ export const MAX_FOTOS = 4;
 // ══════════════════════════════════════════════════
 
 /**
- * Celular o teléfono fijo peruano, sin contar espacios ni guiones:
- * - celular: 9 dígitos que empiezan por 9 (987654321);
- * - fijo de Lima: 01 y 7 dígitos (011234567);
- * - fijo de provincia: 0, el código de área y 6 dígitos, 9 en total
- *   (044123456). Los códigos van del 41 al 84: basta con 0[2-8] para no
- *   dejar fuera uno bueno y rechazar el 00 y el 09.
+ * Celular o teléfono fijo peruano, mirando solo sus dígitos (paréntesis,
+ * espacios, guiones, puntos y el +51 no cuentan): ver `tipoTelefono`.
  * El vacío es válido porque el teléfono no es obligatorio.
  */
 export function telefonoEsValido(telefono: string | undefined): boolean {
-  const limpio = String(telefono || '').replace(/\s|-/g, '');
-  if (!limpio) return true;
-  return /^9\d{8}$/.test(limpio) || /^01\d{7}$/.test(limpio) || /^0[2-8]\d{7}$/.test(limpio);
+  return !numeroLimpio(telefono) || tipoTelefono(telefono) !== '';
 }
 
 /** El nombre de antes: el campo sigue llamándose celular en la hoja. */
 export const celularEsValido = telefonoEsValido;
 
-/** El mensaje a mostrar bajo el campo, o vacío si está bien. */
-export function errorCelular(celular: string | undefined): string {
-  if (telefonoEsValido(celular)) return '';
-  return 'Celular de 9 dígitos (9…) o fijo con código (01…)';
+/**
+ * El aviso bajo el campo, o vacío si está bien. Es un aviso y no un
+ * error: el CAP puede seguir, y el número se guarda tal como lo escribió.
+ */
+export function avisoTelefono(telefono: string | undefined): string {
+  if (telefonoEsValido(telefono)) return '';
+  return 'Revisa el número: no parece celular ni fijo';
 }
 
 // ══════════════════════════════════════════════════

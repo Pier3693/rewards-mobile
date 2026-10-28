@@ -143,34 +143,50 @@ export function partirPorCoincidencia(
 // ══════════════════════════════════════════════════
 
 /**
+ * Solo los dígitos, sin el 51 de Perú: "(01) 438-7415" → "014387415",
+ * "+51 963 258 741" → "963258741". El 51 se quita solo si quedan 11
+ * dígitos: un número de 9 que empieza por 51 no lleva prefijo.
+ */
+export function numeroLimpio(telefono: string | undefined): string {
+  const d = String(telefono || '').replace(/\D/g, '');
+  return d.length === 11 && d.startsWith('51') ? d.slice(2) : d;
+}
+
+/**
+ * Qué número es, ya limpio:
+ * - celular: 9 dígitos que empiezan por 9 (963258741);
+ * - fijo: 01 y 7 dígitos (Lima), o 0, código de área y 6 dígitos, 9 en
+ *   total (044123456). Los códigos van del 41 al 84: basta con 0[2-8]
+ *   para no dejar fuera uno bueno y rechazar el 00 y el 09;
+ * - '': ninguno de los dos.
+ */
+export function tipoTelefono(telefono: string | undefined): 'celular' | 'fijo' | '' {
+  const n = numeroLimpio(telefono);
+  if (/^9\d{8}$/.test(n)) return 'celular';
+  if (/^01\d{7}$/.test(n) || /^0[2-8]\d{7}$/.test(n)) return 'fijo';
+  return '';
+}
+
+/**
  * Celular listo para wa.me: solo dígitos y con el 51 de Perú delante.
- * Devuelve cadena vacía si no hay un celular válido de 9 dígitos que
- * empiece por 9, para poder ocultar el botón en vez de abrir un chat roto.
+ * Devuelve cadena vacía si no es un celular, para poder ocultar el botón
+ * en vez de abrir un chat roto. Un fijo no tiene WhatsApp.
  */
 export function telefonoWhatsApp(celular: string | undefined): string {
-  const digitos = String(celular || '').replace(/\D/g, '');
-  if (!digitos) return '';
-
-  const sinPais = digitos.startsWith('51') ? digitos.slice(2) : digitos;
-  if (!/^9\d{8}$/.test(sinPais)) return '';
-  return '51' + sinPais;
+  return tipoTelefono(celular) === 'celular' ? '51' + numeroLimpio(celular) : '';
 }
 
 /** Un fijo con su código: "011234567" (Lima) o "044123456" (provincia). */
 function fijoDe(telefono: string | undefined): string {
-  const d = String(telefono || '').replace(/\D/g, '');
-  return /^01\d{7}$/.test(d) || /^0[2-8]\d{7}$/.test(d) ? d : '';
+  return tipoTelefono(telefono) === 'fijo' ? numeroLimpio(telefono) : '';
 }
 
 /**
- * Para el enlace tel: "+51987654321", o el fijo sin su 0 ("+5111234567",
- * "+5144123456"). Vacío si no es un número que se pueda marcar.
+ * Para el enlace tel: el número limpio, solo dígitos ("963258741",
+ * "014387415"). Vacío si no es un celular ni un fijo.
  */
 export function telefonoLlamada(telefono: string | undefined): string {
-  const celular = telefonoWhatsApp(telefono);
-  if (celular) return '+' + celular;
-  const fijo = fijoDe(telefono);
-  return fijo ? '+51' + fijo.slice(1) : '';
+  return tipoTelefono(telefono) ? numeroLimpio(telefono) : '';
 }
 
 /** El mismo número, en formato legible: "987 654 321", "01 123 4567", "044 123 456". */
