@@ -39,6 +39,15 @@ import { useUbicacion } from '@/lib/useUbicacion';
 import { useRutaSugerida } from '@/lib/useRutaSugerida';
 import { numerosSugeridos, type Lugar, type RutaSugerida } from '@/lib/rutaSugerida';
 import { etiquetaHora } from '@/lib/ruta';
+import {
+  getRutasProximas,
+  rutasProximasEnCopia,
+  diasDelSelector,
+  tituloDia,
+  textoDisponible,
+} from '@/lib/rutasProximas';
+import { useDiaElegido } from '@/lib/useDiaElegido';
+import SelectorDias from '@/components/SelectorDias';
 import { plataformaDe } from '@/lib/instalacion';
 import { MOTIVO_CLS, type Motivo } from '@/lib/visita';
 import BottomSheet from '@/components/BottomSheet';
@@ -136,9 +145,28 @@ export default function MapaRuta() {
     });
   }, []);
 
+  // ── Los próximos días: el mismo día elegido que en Hoy ──
+  const [proximas, setProximas] = useState<DiaData[]>([]);
+  const [diaElegido, elegirDia] = useDiaElegido();
+  useEffect(() => {
+    setProximas(rutasProximasEnCopia());
+    getRutasProximas().then((r) => setProximas(r.dias));
+  }, []);
+  const totalHoy = useMemo(() => paradasDelDia(dia).length, [dia]);
+  const opcionesDias = useMemo(() => diasDelSelector(totalHoy, proximas), [totalHoy, proximas]);
+  const diaFuturo = useMemo(
+    () => (diaElegido ? proximas.find((d) => d.fecha === diaElegido && opcionesDias.some((o) => o.fecha === d.fecha)) || null : null),
+    [diaElegido, proximas, opcionesDias],
+  );
+
   const paradas = useMemo(
-    () => separarParadas(paradasDelDia(aplicarEncoladasAlDia(dia, cola.visitas.map((v) => v.resumen)))),
-    [dia, cola.visitas],
+    () =>
+      separarParadas(
+        diaFuturo
+          ? paradasDelDia(diaFuturo)
+          : paradasDelDia(aplicarEncoladasAlDia(dia, cola.visitas.map((v) => v.resumen))),
+      ),
+    [dia, diaFuturo, cola.visitas],
   );
   const todas = useMemo(
     () => [...paradas.conUbicacion, ...paradas.sinUbicacion].sort((a, b) => a.numero - b.numero),
@@ -146,7 +174,7 @@ export default function MapaRuta() {
   );
 
   // ── Ruta sugerida: con la ubicación, por cercanía; si no, null ──
-  const sugerencia = useRutaSugerida(todas, ubicacion);
+  const sugerencia = useRutaSugerida(todas, diaFuturo ? null : ubicacion);
   const ruta = sugerencia?.ruta || null;
   const numeros = useMemo(() => (ruta ? numerosSugeridos(ruta) : null), [ruta]);
   /** El número que se ve: el del orden sugerido, o el de la ruta sin ubicación. */
@@ -292,6 +320,16 @@ export default function MapaRuta() {
     encuadrar(true);
   }, [cargando, encuadrar]);
 
+  // Al cambiar de día, sus paradas (sin la ubicación: no es para hoy).
+  const diaEncuadrado = useRef('');
+  useEffect(() => {
+    const clave = diaFuturo?.fecha || 'hoy';
+    if (cargando || diaEncuadrado.current === clave) return;
+    const primera = !diaEncuadrado.current;
+    diaEncuadrado.current = clave;
+    if (!primera) encuadrar(!diaFuturo);
+  }, [cargando, diaFuturo, encuadrar]);
+
   // El punto azul y su círculo de precisión, que se mueven al caminar.
   useEffect(() => {
     const m = mapa.current;
@@ -365,7 +403,9 @@ export default function MapaRuta() {
       <div className="mapa-arriba fixed inset-x-0 z-10 px-4">
         <div className="mx-auto flex max-w-md items-start gap-2">
           <div className="card min-w-0 flex-1 px-3.5 py-2.5 shadow-lg">
-            <p className="text-[15px] font-bold leading-tight">Mapa de hoy</p>
+            <p className="truncate text-[15px] font-bold leading-tight">
+              {diaFuturo ? tituloDia(diaFuturo.fecha) : 'Mapa de hoy'}
+            </p>
             <p className="truncate text-[12px] text-ink-2">
               {cargando
                 ? 'Cargando tu ruta…'
@@ -384,6 +424,18 @@ export default function MapaRuta() {
         </div>
 
         <div className="mx-auto mt-2 max-w-md space-y-2">
+          {!cargando && opcionesDias.length > 0 && (
+            <SelectorDias
+              opciones={opcionesDias}
+              elegido={diaFuturo ? diaFuturo.fecha : opcionesDias[0].fecha}
+              onElegir={(o) => {
+                setAbierta(null);
+                elegirDia(o.esHoy ? '' : o.fecha);
+              }}
+              className="-mx-4 px-4"
+            />
+          )}
+
           {sinConexion && (
             <div className="flex items-center gap-2 rounded-2xl bg-warn-light px-3.5 py-2 text-[12.5px] font-medium text-warn shadow-lg backdrop-blur">
               <span className="min-w-0 flex-1">Sin conexión: el mapa puede verse incompleto.</span>
@@ -395,7 +447,8 @@ export default function MapaRuta() {
             </div>
           )}
 
-          {estadoUbicacion === 'explicar' && (
+          {/* En un día que viene la ubicación no se usa: no se pide. */}
+          {estadoUbicacion === 'explicar' && !diaFuturo && (
             <div className="card p-3.5 shadow-lg">
               <p className="text-[13.5px] font-semibold">Para mostrarte tus visitas cercanas</p>
               <p className="mt-0.5 text-[12.5px] text-ink-2">
@@ -444,7 +497,27 @@ export default function MapaRuta() {
       </div>
 
       {/* ── Abajo, sobre la barra: la ruta sugerida, o la invitación a activarla ── */}
-      {!cargando && (
+      {!cargando && diaFuturo && (
+        <section aria-label="Ruta de otro día" className="mapa-abajo fixed inset-x-4 z-10 mx-auto max-w-md">
+          <div className="card flex items-center gap-3 p-3.5 shadow-lg">
+            <div className="min-w-0 flex-1">
+              {/* La fecha ya está arriba, en el título del mapa. */}
+              <p className="truncate text-[14px] font-bold">
+                {todas.length} {todas.length === 1 ? 'parada' : 'paradas'}
+              </p>
+              <p className="text-[12px] text-ink-2">Solo para consultar · {textoDisponible(diaFuturo.fecha)}</p>
+            </div>
+            <button
+              onClick={() => setLista({ titulo: tituloDia(diaFuturo.fecha), subtitulo: 'Elige una para ver su detalle', paradas: todas })}
+              className="min-h-11 shrink-0 rounded-xl border border-line bg-surface px-3.5 text-[13.5px] font-semibold text-ink"
+            >
+              Ver lista
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!cargando && !diaFuturo && (
         <TarjetaRuta
           ruta={ruta}
           estadoUbicacion={estadoUbicacion}
@@ -634,7 +707,12 @@ export default function MapaRuta() {
             >
               <IconStore className="h-[18px] w-[18px]" /> Ver local
             </button>
-            {!hoja.hecha && hoja.idLocal && (
+            {diaFuturo && (
+              <p className="col-span-2 flex min-h-[52px] items-center justify-center rounded-2xl bg-gris-light text-[14px] font-semibold text-ink-2">
+                {textoDisponible(diaFuturo.fecha)}
+              </p>
+            )}
+            {!diaFuturo && !hoja.hecha && hoja.idLocal && (
               <button
                 onClick={() =>
                   router.push(

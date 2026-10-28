@@ -107,13 +107,43 @@ const local = (id) => ({
 });
 
 const hoy = new Date();
-const fechaHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+const fechaTexto = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+const fechaHoy = fechaTexto(hoy);
+/** Dentro de `n` días, para las rutas próximas. */
+const fechaEn = (n) => fechaTexto(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + n));
 
 /** 1×1 transparente. */
 const PNG_VACIO =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=';
 
 const RESPUESTAS = {
+  // Mañana y dentro de 4 días: el selector de días y su ruta de solo lectura.
+  getAsignacionesProximas: {
+    ok: true,
+    data: {
+      dias: [
+        {
+          fecha: fechaEn(1),
+          pendientes: [
+            parada('ASG-11', 'PC-0001', { hora: '09:00', kam: 'KAM RESPONSABLE CON NOMBRE COMPLETO', lat: -12.1211, lng: -77.0297, geo_estado: 'OK' }),
+            parada('ASG-12', 'CC-0003', { motivo: 'Capacitación Presencial', hora: '11:00', hora_fin: '12:30', estado: 'rango', lat: -12.0886, lng: -77.0158, geo_estado: 'OK' }),
+          ],
+          completadas: [],
+          total: 2,
+        },
+        {
+          fecha: fechaEn(4),
+          pendientes: [
+            parada('ASG-21', 'CC-0002', { motivo: 'Branding', estado: 'flexible', hora: '' }),
+            parada('ASG-22', 'PC-0003', { hora: '15:00', lat: -12.1105, lng: -77.0352, geo_estado: 'OK' }),
+            parada('ASG-23', 'CC-0004', { motivo: 'Capacitación Virtual', hora: '16:00', meet_link: 'meet.google.com/abc-defg-hij' }),
+          ],
+          completadas: [],
+          total: 3,
+        },
+      ],
+    },
+  },
   getAsignacionesDia: {
     ok: true,
     data: {
@@ -639,6 +669,28 @@ const PANTALLAS = [
       await esperar(900);
     },
   },
+  {
+    // Hoy con las pestañas de los próximos días.
+    nombre: 'hoy-selector',
+    pasos: async (p) => {
+      await p.ir('/login', 500);
+      await p.evaluar(SESION);
+      await p.ir('/hoy', 3000);
+    },
+  },
+  {
+    // Mañana: resumen y ruta de solo lectura.
+    nombre: 'hoy-futuro',
+    pasos: async (p) => {
+      await p.evaluar(`(() => { const t = document.querySelectorAll('[role="tab"]')[1]; if (t) t.click(); return !!t; })()`);
+      await esperar(600);
+    },
+  },
+  {
+    // El Mapa sigue el día elegido en Hoy. Va al final: deja elegido mañana.
+    nombre: 'mapa-futuro',
+    pasos: async (p) => p.ir('/mapa', 3500),
+  },
 ];
 
 /**
@@ -732,7 +784,7 @@ async function main() {
               fallos += problemas.length;
             }
 
-            if (['mapa', 'mapa-sin-ubicacion', 'mapa-ruta'].includes(pantalla.nombre)) {
+            if (['mapa', 'mapa-sin-ubicacion', 'mapa-ruta', 'mapa-futuro'].includes(pantalla.nombre)) {
               const problemas = await p.evaluar(MEDIR_MAPA);
               for (const pr of problemas) console.log(`      ✗ mapa: ${pr}`);
               fallos += problemas.length;
