@@ -13,6 +13,9 @@ import {
 } from './sincronizacion.ts';
 import {
   nuevaEntrada,
+  nuevaEdicion,
+  esEdicion,
+  soloRegistros,
   ordenarPorAntiguedad,
   encoladasDeAsignacion,
   localTieneEncolada,
@@ -577,5 +580,121 @@ describe('guardar primero en el celular', () => {
     });
     assert.equal(r.enCola, false);
     assert.equal(llamadas, 0, 'no envía nada por su cuenta');
+  });
+});
+
+// ══════════════════════════════════════════════════
+// Corregir una visita ya registrada: la edición viaja por la misma cola.
+describe('ediciones en la cola', () => {
+  const edicion = (campos: Partial<VisitaEncolada> = {}) => ({
+    ...nuevaEdicion(
+      'e-1',
+      { id_visita: 'v-1', status: 'Incidencia', fotosBase64: [] },
+      { comercio: 'Tambo+', status: 'Incidencia', idAsignacion: 'ASG-1', idLocal: 'PC-0001' },
+      CORREO,
+      AHORA + 1000,
+    ),
+    ...campos,
+  });
+
+  test('se crea con su acción, su clave y el id_edicion en el payload', () => {
+    const e = edicion();
+    assert.equal(e.accion, 'editarVisita');
+    assert.equal(e.idVisita, 'editar:e-1');
+    assert.equal(e.payload.id_edicion, 'e-1');
+    assert.equal(e.payload.id_visita, 'v-1');
+    assert.equal(esEdicion(e), true);
+    assert.equal(esEdicion(visita()), false);
+  });
+
+  test('se envía con la acción editarVisita, y la visita con registrarVisita', async () => {
+    const acciones: (string | undefined)[] = [];
+    const almacen = almacenFalso([edicion({ payload: { id_visita: 'v-9' } })]);
+    await procesarCola({
+      almacen,
+      correo: CORREO,
+      ahora: AHORA + 5000,
+      enviar: async (_p, accion) => {
+        acciones.push(accion);
+        return { ok: true };
+      },
+    });
+    assert.deepEqual(acciones, ['editarVisita']);
+    assert.equal(almacen.contenido.size, 0);
+  });
+
+  test('espera a que su visita salga de la cola, y sale detrás en la misma pasada', async () => {
+    const orden: string[] = [];
+    const almacen = almacenFalso([visita(), edicion()]);
+    await procesarCola({
+      almacen,
+      correo: CORREO,
+      ahora: AHORA + 5000,
+      enviar: async (p, accion) => {
+        orden.push(`${accion || 'registrarVisita'}:${p.id_visita || 'v-1'}`);
+        return { ok: true };
+      },
+    });
+    assert.deepEqual(orden, ['registrarVisita:v-1', 'editarVisita:v-1']);
+    assert.equal(almacen.contenido.size, 0);
+  });
+
+  test('si la visita no sale, la edición no se intenta (ni cuenta intento)', async () => {
+    const almacen = almacenFalso([visita(), edicion()]);
+    const enviadas: (string | undefined)[] = [];
+    await procesarCola({
+      almacen,
+      correo: CORREO,
+      ahora: AHORA + 5000,
+      enviar: async (_p, accion) => {
+        enviadas.push(accion);
+        return falloRed();
+      },
+    });
+    assert.deepEqual(enviadas, [undefined]);
+    assert.equal(almacen.contenido.get('editar:e-1')?.intentos, 0);
+  });
+
+  test('"repetida" la borra: el backend ya la había aplicado', async () => {
+    const almacen = almacenFalso([edicion()]);
+    await procesarCola({
+      almacen,
+      correo: CORREO,
+      ahora: AHORA + 5000,
+      enviar: async () => ({ ok: true, data: { repetida: true } }),
+    });
+    assert.equal(almacen.contenido.size, 0);
+  });
+
+  test('un rechazo del backend la deja para revisar, sin borrarla', async () => {
+    const almacen = almacenFalso([edicion()]);
+    const e = almacen.contenido.get('editar:e-1')!;
+    await registrarResultado(almacen, e, 'error', AHORA, 'Solo se puede editar una visita del mismo día');
+    assert.equal(almacen.contenido.get('editar:e-1')?.revisar, true);
+  });
+
+  test('al guardar, no sale de inmediato si su visita sigue en la cola', async () => {
+    const almacen = almacenFalso([visita()]);
+    let llamadas = 0;
+    const r = await guardarPrimeroLocal({
+      almacen,
+      entrada: edicion(),
+      enviar: async () => {
+        llamadas++;
+        return { ok: true };
+      },
+      enVuelo: new Set(),
+    });
+    assert.equal(r.enCola, true);
+    if (r.enCola) assert.equal((await r.envio).resultado, 'reintentar');
+    assert.equal(llamadas, 0);
+    assert.equal(almacen.contenido.get('editar:e-1')?.intentos, 0, 'no cuenta como intento');
+  });
+
+  test('una edición no es una visita para la asignación ni para el local', () => {
+    const cola = [edicion()];
+    assert.deepEqual(encoladasDeAsignacion(cola, 'ASG-1'), []);
+    assert.equal(localTieneEncolada(cola, 'PC-0001'), false);
+    assert.deepEqual(soloRegistros([visita(), edicion()]).map((v) => v.idVisita), ['v-1']);
   });
 });

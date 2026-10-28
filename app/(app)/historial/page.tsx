@@ -13,6 +13,7 @@ import {
   tituloDeDia,
   fotosDe,
   diaDeHoy,
+  sePuedeEditar,
   type VisitaApi,
   type VisitaHistorial,
   type FiltroStatus,
@@ -31,7 +32,8 @@ import { ubicacionDe } from '@/lib/ruta';
 import { horaDe } from '@/lib/texto';
 import BottomSheet from '@/components/BottomSheet';
 import ErrorDeCarga from '@/components/ErrorDeCarga';
-import { IconRefresh, IconImage, IconStore, IconCalendar } from '@/components/icons';
+import MiniaturaFoto from '@/components/MiniaturaFoto';
+import { IconRefresh, IconStore, IconCalendar, IconEdit } from '@/components/icons';
 
 const FILTROS: { valor: FiltroStatus; label: string }[] = [
   { valor: 'todas', label: 'Todas' },
@@ -212,6 +214,14 @@ export default function HistorialPage() {
           onReintentar={cola.reintentar}
           onClose={() => setAbierta(null)}
           onVerLocal={(id) => router.push(`/local/${encodeURIComponent(id)}`)}
+          onEditar={
+            sePuedeEditar(abierta)
+              ? () =>
+                  router.push(
+                    `/visita/${encodeURIComponent(abierta.id_local)}?editar=${encodeURIComponent(abierta.id_visita)}`,
+                  )
+              : undefined
+          }
         />
       )}
     </main>
@@ -275,6 +285,11 @@ function Tarjeta({ v, envio, onTap }: { v: VisitaHistorial; envio?: EstadoEnvio;
         <ChipMotivo motivo={v.motivo} />
         <ChipStatus status={v.status} />
         {envio && <ChipEnvio estado={envio} />}
+        {v.edicionPendiente && (
+          <span className="rounded-full bg-warn-light px-2.5 py-0.5 text-[11px] font-semibold text-warn">
+            Edición pendiente
+          </span>
+        )}
       </div>
     </button>
   );
@@ -290,6 +305,7 @@ function Detalle({
   onReintentar,
   onClose,
   onVerLocal,
+  onEditar,
 }: {
   v: VisitaHistorial;
   titulo: string;
@@ -299,6 +315,8 @@ function Detalle({
   onReintentar: () => void;
   onClose: () => void;
   onVerLocal: (id: string) => void;
+  /** Solo las de hoy: una visita se corrige el mismo día. */
+  onEditar?: () => void;
 }) {
   const { tipo, texto } = separarObservacion(v.observacion);
   const { fotos, nota } = fotosDe(v.fotos);
@@ -311,6 +329,11 @@ function Detalle({
         <ChipMotivo motivo={v.motivo} />
         <ChipStatus status={v.status} />
         {envio && <ChipEnvio estado={envio} />}
+        {v.edicionPendiente && (
+          <span className="rounded-full bg-warn-light px-2.5 py-0.5 text-[11px] font-semibold text-warn">
+            Edición pendiente
+          </span>
+        )}
       </div>
       {envio && envio !== 'enviando' && (
         <div className="mt-3 rounded-xl bg-warn-light px-3.5 py-2.5 text-[12.5px] text-warn">
@@ -348,11 +371,20 @@ function Detalle({
               <img key={i} src={src} alt={`Foto ${i + 1}`} className="aspect-square w-full rounded-xl object-cover" />
             ))}
             {fotos.map((f, i) => (
-              <Miniatura key={f.url} url={f.url} miniatura={f.miniatura} n={i + 1} />
+              <MiniaturaFoto key={f.url} url={f.url} src={f.miniatura} n={i + 1} />
             ))}
           </div>
           {nota && <p className="mt-2 text-[12.5px] text-ink-2">{nota}</p>}
         </>
+      )}
+
+      {onEditar && (
+        <button
+          onClick={onEditar}
+          className="mt-6 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-primary-light text-[14px] font-semibold text-primary active:scale-[0.98]"
+        >
+          <IconEdit className="h-[18px] w-[18px]" /> Editar visita
+        </button>
       )}
 
       {v.id_local && (
@@ -364,36 +396,6 @@ function Detalle({
         </button>
       )}
     </BottomSheet>
-  );
-}
-
-/** Abre la foto en Drive. Si la miniatura no carga (sin permiso, sin señal), un ícono. */
-function Miniatura({ url, miniatura, n }: { url: string; miniatura: string; n: number }) {
-  const [fallo, setFallo] = useState(!miniatura);
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`Abrir foto ${n} en Drive`}
-      className="grid aspect-square w-full place-items-center overflow-hidden rounded-xl bg-gris-light text-ink-2"
-    >
-      {fallo ? (
-        <IconImage className="h-6 w-6" />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element -- miniatura de Drive, sin next/image
-        <img
-          src={miniatura}
-          alt={`Foto ${n}`}
-          onError={() => setFallo(true)}
-          className="h-full w-full object-cover"
-          referrerPolicy="no-referrer"
-          // Solo se piden las que se ven, y sin bloquear el pintado.
-          loading="lazy"
-          decoding="async"
-        />
-      )}
-    </a>
   );
 }
 

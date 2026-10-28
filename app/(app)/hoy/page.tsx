@@ -17,6 +17,7 @@ import {
   type DiaData,
 } from '@/lib/cacheDia';
 import { precalentarRutas } from '@/lib/precalentar';
+import { buscarVisitaDeHoy } from '@/lib/historial';
 import { haceCuanto } from '@/lib/texto';
 import {
   ordenarRuta,
@@ -43,6 +44,7 @@ import {
   IconRefresh,
   IconCheck,
   IconVideo,
+  IconEdit,
   IconPlay,
   IconNavigation,
   IconClock,
@@ -222,6 +224,19 @@ export default function HoyPage() {
   }
 
   /** Entra directo al registro, con la asignación para que quede completada. */
+  /** La parada ya se hizo: se corrige su visita de hoy, no se registra otra. */
+  const [buscandoVisita, setBuscandoVisita] = useState('');
+  async function editarVisita(p: Parada) {
+    if (!p.id_local || buscandoVisita) return;
+    setBuscandoVisita(p.id_asignacion || p.id_local);
+    const id = await buscarVisitaDeHoy(p.id_local, p.id_asignacion).catch(() => '');
+    setBuscandoVisita('');
+    // Sin la visita a mano (sin señal y sin copia), Historial la muestra.
+    if (!id) return router.push('/historial');
+    const asg = p.id_asignacion ? `&asg=${encodeURIComponent(p.id_asignacion)}` : '';
+    router.push(`/visita/${encodeURIComponent(p.id_local)}?editar=${encodeURIComponent(id)}${asg}`);
+  }
+
   function registrar(p: Parada) {
     if (!p.id_local) return;
     const asg = p.id_asignacion ? `?asg=${encodeURIComponent(p.id_asignacion)}` : '';
@@ -332,6 +347,8 @@ export default function HoyPage() {
                 ahora={ahora}
                 ultima={i === ruta.length - 1}
                 onTap={() => abrirParada(p)}
+                onEditar={() => editarVisita(p)}
+                buscando={!!buscandoVisita && buscandoVisita === (p.id_asignacion || p.id_local)}
               />
             ))}
           </ol>
@@ -627,11 +644,16 @@ function Fila({
   ahora,
   ultima,
   onTap,
+  onEditar,
+  buscando,
 }: {
   p: Parada;
   ahora: Date;
   ultima: boolean;
   onTap: () => void;
+  /** Corregir la visita de una parada ya hecha. */
+  onEditar: () => void;
+  buscando: boolean;
 }) {
   const hecha = estaCompletada(p);
   const resultado = resultadoDe(p);
@@ -706,6 +728,18 @@ function Fila({
             )}
           </div>
         </button>
+
+        {/* Fuera del botón de la tarjeta: un botón no va dentro de otro. */}
+        {hecha && p.id_local && (
+          <button
+            onClick={onEditar}
+            disabled={buscando}
+            className="mt-2.5 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-primary-light text-[13px] font-semibold text-primary active:scale-[0.98] disabled:opacity-60"
+          >
+            <IconEdit className="h-4 w-4" />
+            {buscando ? 'Buscando…' : 'Editar visita'}
+          </button>
+        )}
 
         {!hecha && meet && (
           <a

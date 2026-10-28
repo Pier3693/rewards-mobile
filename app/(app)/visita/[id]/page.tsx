@@ -18,6 +18,7 @@ import {
   invalidarRutaDeHoy,
   paradasDelDia,
   asignacionDeLocal,
+  asignacionesDeLocal,
   asignacionesPendientesDeLocal,
   getLocalDelDia,
   localDelDiaEnCache,
@@ -37,7 +38,16 @@ import {
 } from '@/lib/ruta';
 import { tituloBonito, horaDe } from '@/lib/texto';
 import { clearSession, marcarSesionExpirada, getUsuario } from '@/lib/auth';
-import { nuevaEntrada } from '@/lib/cola';
+import { colaIndexedDB, esEdicion, nuevaEdicion, nuevaEntrada, PREFIJO_EDICION } from '@/lib/cola';
+import {
+  aplicarEdiciones,
+  buscarVisitaDeHoy,
+  deLaCola,
+  fotosDe,
+  getMisVisitas,
+  sePuedeEditar,
+  type VisitaHistorial,
+} from '@/lib/historial';
 import { guardarYEnviar } from '@/lib/sincronizador';
 import { estadoDeVisita, TEXTO_ESTADO } from '@/lib/estadoEnvio';
 import { useConexion } from '@/lib/useConexion';
@@ -51,6 +61,8 @@ import {
   errorCelular,
   celularEsValido,
   componerObservacion,
+  separarObservacion,
+  normalizarStatus,
   armarPeticionVisita,
   datosTrasVisita,
   prellenadoDesde,
@@ -89,6 +101,7 @@ import {
 } from '@/lib/datosLocal';
 import BottomSheet from '@/components/BottomSheet';
 import ErrorDeCarga from '@/components/ErrorDeCarga';
+import MiniaturaFoto from '@/components/MiniaturaFoto';
 import {
   IconStore,
   IconMegaphone,
@@ -106,6 +119,12 @@ import {
   IconPlay,
 } from '@/components/icons';
 
+/** Una foto que la visita ya tiene: en Drive (con su enlace) o en el celular. */
+interface FotoGuardada {
+  src: string;
+  url?: string;
+}
+
 const ICONO_MOTIVO: Record<Motivo, React.ReactNode> = {
   Visita: <IconStore />,
   Branding: <IconMegaphone />,
@@ -122,13 +141,25 @@ const ICONO_STATUS: Record<Status, React.ReactNode> = {
 
 const PASOS = ['Resultado', 'Datos del local', 'Evidencia'];
 
+/**
+ * La URL decide si es un registro o una corrección: al pasar de una a
+ * otra (Editar esa visita) el formulario se monta de cero.
+ */
 export default function VisitaPage() {
+  const busqueda = useSearchParams();
+  return <RegistroVisita key={busqueda.get('editar') || 'nueva'} />;
+}
+
+function RegistroVisita() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const busqueda = useSearchParams();
 
   const idLocal = decodeURIComponent(String(params?.id || '')).toUpperCase();
   const idAsignacionUrl = busqueda.get('asg') || '';
+  /** Corregir una visita ya registrada (su id_visita) en vez de crear otra. */
+  const idEditar = busqueda.get('editar') || '';
+  const editando = !!idEditar;
 
   const [local, setLocal] = useState<Autocompletado | null>(null);
   const [dia, setDia] = useState<DiaData | null>(null);
@@ -181,6 +212,16 @@ export default function VisitaPage() {
   const [asgElegida, setAsgElegida] = useState<string | null>(null);
   /** El CAP dijo que no corresponde a ninguna: es una visita extra. */
   const [esVisitaExtra, setEsVisitaExtra] = useState(false);
+  /**
+   * Al editar: la visita tal como está (con sus correcciones pendientes)
+   * y las fotos que ya tiene, que se conservan.
+   */
+  const [edicion, setEdicion] = useState<{ original: VisitaHistorial; existentes: FotoGuardada[] } | null>(null);
+  const [preparando, setPreparando] = useState(editando);
+  const [errorEdicion, setErrorEdicion] = useState('');
+  /** Ya hay una visita de hoy a esta parada: se ofrece corregirla. */
+  const [buscandoVisita, setBuscandoVisita] = useState(false);
+  const [sinVisitaDeHoy, setSinVisitaDeHoy] = useState(false);
 
   const camaraRef = useRef<HTMLInputElement>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
@@ -218,23 +259,53 @@ export default function VisitaPage() {
    * fila equivocada.
    */
   const asignacion = useMemo(() => {
-    if (esVisitaExtra) return null;
+    if (esVisitaExtra || editando) return null;
     const todas = asignacionesPendientesDeLocal(diaConCola, idLocal);
     const buscado = idAsignacionUrl || asgElegida;
     if (buscado) {
       return todas.find((p) => p.id_asignacion === buscado) || null;
     }
     return asignacionDeLocal(diaConCola, idLocal);
-  }, [diaConCola, idLocal, idAsignacionUrl, asgElegida, esVisitaExtra]);
+  }, [diaConCola, idLocal, idAsignacionUrl, asgElegida, esVisitaExtra, editando]);
 
   /** Hay que preguntar mientras no se sepa de cuál es. */
   const debeElegir =
-    !idAsignacionUrl && !asgElegida && !esVisitaExtra && pendientes.length > 1;
+    !editando && !idAsignacionUrl && !asgElegida && !esVisitaExtra && pendientes.length > 1;
 
-  const idAsignacion = asignacion?.id_asignacion || '';
+  const idAsignacion = editando ? idAsignacionUrl : asignacion?.id_asignacion || '';
   /** Con asignación, el motivo lo manda la ruta y no se puede cambiar. */
-  const motivoFijo = (asignacion?.motivo as Motivo) || null;
-  const clave = claveBorrador(idLocal, idAsignacion);
+  const motivoFijo = editando
+    ? (idAsignacionUrl && (edicion?.original.motivo as Motivo)) || null
+    : (asignacion?.motivo as Motivo) || null;
+  // La corrección tiene su propio borrador: no se mezcla con un registro.
+  const clave = editando
+    ? claveBorrador(idLocal, `editar_${idEditar}`)
+    : claveBorrador(idLocal, idAsignacion);
+
+  /**
+   * La parada de esta visita ya se hizo hoy (por eso no queda pendiente):
+   * registrar otra vez la duplicaría, como pasó con Depilzone. Se ofrece
+   * corregir la que ya está.
+   */
+  const yaHechaHoy = useMemo(() => {
+    if (editando || esVisitaExtra || asignacion || pendientes.length) return null;
+    return (
+      asignacionesDeLocal(diaConCola, idLocal).find(
+        (p) => estaCompletada(p) && (!idAsignacionUrl || p.id_asignacion === idAsignacionUrl),
+      ) || null
+    );
+  }, [editando, esVisitaExtra, asignacion, pendientes.length, diaConCola, idLocal, idAsignacionUrl]);
+
+  async function editarLaDeHoy() {
+    if (!yaHechaHoy) return;
+    setBuscandoVisita(true);
+    setSinVisitaDeHoy(false);
+    const id = await buscarVisitaDeHoy(idLocal, yaHechaHoy.id_asignacion).catch(() => '');
+    setBuscandoVisita(false);
+    if (!id) return setSinVisitaDeHoy(true);
+    const asg = yaHechaHoy.id_asignacion ? `&asg=${encodeURIComponent(yaHechaHoy.id_asignacion)}` : '';
+    router.replace(`/visita/${encodeURIComponent(idLocal)}?editar=${encodeURIComponent(id)}${asg}`);
+  }
 
   /**
    * La asignación llega con la ruta, y cuando hay varias el CAP elige
@@ -243,7 +314,7 @@ export default function VisitaPage() {
    */
   const prellenadaCon = useRef('');
   useEffect(() => {
-    if (cargando || tocado || !asignacion || !local) return;
+    if (editando || cargando || tocado || !asignacion || !local) return;
     if (prellenadaCon.current === asignacion.id_asignacion) return;
     prellenadaCon.current = asignacion.id_asignacion;
     const desdeAsignacion = leerProcesadores(asignacion.procesador_pos || asignacion.procesador || '', {
@@ -259,7 +330,7 @@ export default function VisitaPage() {
       hayBeneficios(actual) ? actual : leerBeneficios(asignacion.beneficios || ''),
     );
     setMaterialPop((actual) => actual || leerMaterialPop(asignacion.material_pop || ''));
-  }, [cargando, tocado, asignacion, local]);
+  }, [editando, cargando, tocado, asignacion, local]);
 
   // ── Carga ──────────────────────────────────────
   /** Para el refresco por detrás, que no ve el estado de su render. */
@@ -272,6 +343,8 @@ export default function VisitaPage() {
 
   /** Prellenado con la última visita: el CAP solo corrige lo que cambió. */
   const prellenar = useCallback((a: Autocompletado) => {
+    // Al corregir, el formulario trae la visita, no la última del local.
+    if (editando) return;
     const p = prellenadoDesde(a);
     setContacto(p.contacto);
     setCelular(p.celular);
@@ -280,7 +353,7 @@ export default function VisitaPage() {
     setMaterialPop(p.materialPop);
     // Que la asignación vuelva a completar lo que esto deje vacío.
     prellenadaCon.current = '';
-  }, []);
+  }, [editando]);
 
   const cargar = useCallback(async () => {
     const esta = ++cargaActual.current;
@@ -334,15 +407,83 @@ export default function VisitaPage() {
   }, [cargar]);
 
   /**
+   * Al corregir: la visita sale de la cola si todavía no se envió, o de
+   * Historial. Se le aplican las correcciones que sigan pendientes, para
+   * partir de lo último.
+   */
+  useEffect(() => {
+    if (!editando || cargando || !local || !preparando) return;
+    let vigente = true;
+    (async () => {
+      const cola = await colaIndexedDB.listar();
+      const enCola = cola.find((v) => !esEdicion(v) && v.idVisita === idEditar);
+      let base: VisitaHistorial | null = enCola ? deLaCola(enCola) : null;
+      if (!base) {
+        const r = await getMisVisitas(true);
+        const v = r.ok && r.data ? r.data.find((x) => x.id_visita === idEditar) : undefined;
+        if (v) base = { ...v, pendiente: false };
+      }
+      if (!vigente) return;
+      if (!base) {
+        setErrorEdicion('No encontramos esa visita. Ábrela desde Historial con señal e inténtalo de nuevo.');
+        setPreparando(false);
+        return;
+      }
+      if (!sePuedeEditar(base)) {
+        setErrorEdicion('Solo puedes corregir una visita el mismo día en que la registraste.');
+        setPreparando(false);
+        return;
+      }
+      base = aplicarEdiciones(base, cola.filter(esEdicion));
+
+      if (MOTIVOS.some((m) => m.valor === base.motivo)) setMotivo(base.motivo as Motivo);
+      setStatus(normalizarStatus(base.status));
+      const obs = separarObservacion(base.observacion);
+      setTipoIncidencia(obs.tipo);
+      setObservacion(obs.texto);
+      const p = prellenadoDesde({
+        contacto_nombre: base.contacto,
+        contacto_cel: base.celular,
+        procesador_pos: base.procesador,
+        codigo_openpay: base.cod_openpay,
+        codigo_niubiz: base.cod_niubiz,
+        codigo_izipay: base.cod_izipay,
+        codigo_culqi: base.cod_culqi,
+        beneficios: base.beneficios,
+        material_pop: base.material_pop,
+      });
+      setContacto(p.contacto);
+      setCelular(p.celular);
+      setProcesadores(p.procesadores);
+      setBeneficiosSel(p.beneficios);
+      setMaterialPop(p.materialPop);
+      // Las que ya tiene: las de Drive y las que siguen en el celular.
+      const existentes: FotoGuardada[] = [
+        ...fotosDe(base.fotos).fotos.map((f) => ({ src: f.miniatura, url: f.url })),
+        ...(base.fotosBase64 || []).map((src) => ({ src })),
+      ];
+      setEdicion({ original: base, existentes });
+      setPreparando(false);
+    })().catch(() => {
+      if (!vigente) return;
+      setErrorEdicion('No se pudo abrir la visita. Intenta de nuevo.');
+      setPreparando(false);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [editando, cargando, local, preparando, idEditar]);
+
+  /**
    * El borrador se lee aparte porque su clave depende de la asignación,
    * que solo se conoce al llegar la ruta del día. Si esto viviera dentro
    * de `cargar`, cambiar la clave volvería a disparar la carga y se
    * pediría el local dos veces a Apps Script.
    */
   useEffect(() => {
-    if (cargando || debeElegir || guardada) return;
+    if (cargando || preparando || debeElegir || guardada) return;
     if (borradorTieneAlgo(leerBorrador(clave))) setOfreceBorrador(true);
-  }, [cargando, debeElegir, guardada, clave]);
+  }, [cargando, preparando, debeElegir, guardada, clave]);
 
   useEffect(() => {
     if (motivoFijo) setMotivo(motivoFijo);
@@ -407,7 +548,7 @@ export default function VisitaPage() {
   // ── Fotos ──────────────────────────────────────
   async function agregarFotos(files: FileList | null) {
     if (!files || !files.length) return;
-    const espacio = MAX_FOTOS - fotos.length;
+    const espacio = MAX_FOTOS - fotos.length - (edicion?.existentes.length || 0);
     setComprimiendo(true);
     setError('');
 
@@ -556,13 +697,18 @@ export default function VisitaPage() {
         status,
         observacion: componerObservacion(tipoIncidencia, observacion),
       },
-      { fotosBase64: fotos, idAsignacion, idVisita, creadoEn },
+      // Al corregir, id_visita es el de la visita que se corrige; el de
+      // esta pantalla es el de la corrección (id_edicion).
+      { fotosBase64: fotos, idAsignacion, idVisita: editando ? idEditar : idVisita, creadoEn },
     );
 
     // Al volver a abrir este local (aunque sea sin señal) debe verse esta
-    // visita, no la copia de antes.
+    // visita, no la copia de antes. Una corrección conserva la fecha.
     const recordarVisitaEnElLocal = () =>
-      actualizarLocalTrasVisita(local.id_local, local, datosTrasVisita(peticion, getUsuario()?.nombre || ''));
+      actualizarLocalTrasVisita(local.id_local, local, {
+        ...datosTrasVisita(peticion, getUsuario()?.nombre || ''),
+        ...(edicion ? { ultima_visita: edicion.original.fecha } : {}),
+      });
 
     // Las fotos ya se controlan al elegirlas, así que esto no debería
     // saltar nunca. Si salta, no se envía: Vercel la cortaría con un 413.
@@ -577,19 +723,17 @@ export default function VisitaPage() {
     // Primero se guarda en el celular: si el CAP cierra la app, o se va
     // la señal, la visita y sus fotos siguen ahí. El próximo intento de la
     // cola se deja para después del límite del envío inmediato.
+    const resumen = {
+      comercio: local.comercio,
+      status,
+      idAsignacion,
+      idLocal: local.id_local,
+    };
+    const correo = getUsuario()?.correo || '';
     const entrada = {
-      ...nuevaEntrada(
-        idVisita,
-        peticion,
-        {
-          comercio: local.comercio,
-          status,
-          idAsignacion,
-          idLocal: local.id_local,
-        },
-        getUsuario()?.correo || '',
-        creadoEn,
-      ),
+      ...(editando
+        ? nuevaEdicion(idVisita, peticion, resumen, correo, creadoEn)
+        : nuevaEntrada(idVisita, peticion, resumen, correo, creadoEn)),
       proximoIntento: Date.now() + MS_LIMITE_GUARDADO + 30_000,
     };
 
@@ -609,7 +753,7 @@ export default function VisitaPage() {
 
     // Sin IndexedDB (modo privado) no hay dónde dejarla: se envía
     // esperando la respuesta, como antes.
-    const r = await api('registrarVisita', peticion, {
+    const r = await api(entrada.accion || 'registrarVisita', entrada.payload, {
       msLimite: MS_LIMITE_GUARDADO,
       redirigirSiVence: false,
     });
@@ -655,7 +799,22 @@ export default function VisitaPage() {
   }
 
   // ══════════════════════════════════════════════
-  if (cargando) return <Esqueleto />;
+  if (cargando || preparando) return <Esqueleto />;
+
+  if (errorEdicion) {
+    return (
+      <main className="mx-auto max-w-md px-5 pt-pantalla">
+        <ErrorDeCarga
+          detalle={errorEdicion}
+          onReintentar={() => {
+            setErrorEdicion('');
+            setPreparando(true);
+          }}
+          onVolver={() => router.back()}
+        />
+      </main>
+    );
+  }
 
   if (errorCarga || !local) {
     return (
@@ -674,7 +833,8 @@ export default function VisitaPage() {
       <Confirmacion
         local={local}
         dia={diaConTodaLaCola}
-        idVisita={idVisita}
+        idVisita={editando ? PREFIJO_EDICION + idVisita : idVisita}
+        editando={editando}
         onIniciarSesion={irAlLogin}
         onVerHistorial={() => router.replace('/historial')}
       />
@@ -700,7 +860,7 @@ export default function VisitaPage() {
           <IconX className="h-5 w-5" />
         </button>
         <p className="flex-1 text-center text-[15px] font-bold">
-          Registrar visita
+          {editando ? 'Editar visita' : 'Registrar visita'}
         </p>
         <span className="w-11 text-right text-[13px] font-semibold text-ink-2">
           {paso}/3
@@ -753,8 +913,8 @@ export default function VisitaPage() {
           <p className="truncate font-semibold">{local.comercio}</p>
           <p className="truncate text-[12.5px] text-ink-2">{ubicacion}</p>
         </div>
-        {/* Si viene de una asignación, el local no se cambia. */}
-        {!idAsignacion && (
+        {/* Si viene de una asignación, o se corrige una visita, el local no se cambia. */}
+        {!idAsignacion && !editando && (
           <button
             onClick={() => router.push('/registrar')}
             className="shrink-0 px-1 text-[13px] font-semibold text-primary"
@@ -794,6 +954,7 @@ export default function VisitaPage() {
           beneficios={beneficiosSel}
           materialPop={materialPop}
           ultimaVisita={local.ultima_visita}
+          corrigiendo={edicion?.original.fecha || ''}
           onContacto={(v) => {
             setContacto(v);
             setTocado(true);
@@ -820,6 +981,7 @@ export default function VisitaPage() {
       {paso === 3 && (
         <Paso3
           fotos={fotos}
+          existentes={edicion?.existentes || []}
           comprimiendo={comprimiendo}
           observacion={observacion}
           dictando={dictando}
@@ -881,6 +1043,8 @@ export default function VisitaPage() {
                 'Iniciar sesión'
               ) : puedeReintentar ? (
                 'Reintentar envío'
+              ) : editando ? (
+                'Guardar cambios'
               ) : (
                 'Guardar visita'
               )}
@@ -897,6 +1061,39 @@ export default function VisitaPage() {
           onElegir={(id) => setAsgElegida(id)}
           onExtra={() => setEsVisitaExtra(true)}
         />
+      )}
+
+      {/* ── La parada ya tiene una visita hoy ── */}
+      {yaHechaHoy && !ofreceBorrador && (
+        <BottomSheet
+          titulo="Esta parada ya tiene una visita hoy"
+          subtitulo={local.comercio}
+          onClose={() => router.back()}
+        >
+          <div className="space-y-3">
+            <p className="text-[14px] leading-snug text-ink-2">
+              Si te equivocaste en algo, corrige esa visita: registrar otra dejaría dos.
+            </p>
+            {sinVisitaDeHoy && (
+              <p className="rounded-xl bg-warn-light px-3.5 py-2.5 text-[13px] text-warn">
+                No encontramos la visita de hoy. Búscala en Historial.
+              </p>
+            )}
+            <button
+              onClick={editarLaDeHoy}
+              disabled={buscandoVisita}
+              className="btn-grad min-h-[52px] w-full rounded-2xl text-[15px] font-semibold text-white active:scale-[0.98] disabled:opacity-60"
+            >
+              {buscandoVisita ? 'Buscando…' : 'Editar esa visita'}
+            </button>
+            <button
+              onClick={() => setEsVisitaExtra(true)}
+              className="min-h-[52px] w-full rounded-2xl bg-gris-light text-[15px] font-semibold text-ink-2 active:scale-[0.98]"
+            >
+              Registrar otra
+            </button>
+          </div>
+        </BottomSheet>
       )}
 
       {/* ── Borrador ── */}
@@ -1153,6 +1350,7 @@ function Paso2({
   beneficios,
   materialPop,
   ultimaVisita,
+  corrigiendo,
   onContacto,
   onCelular,
   onProcesadores,
@@ -1165,6 +1363,8 @@ function Paso2({
   beneficios: SeleccionBeneficios;
   materialPop: MaterialPop;
   ultimaVisita: string;
+  /** Al corregir: la fecha de la visita que se corrige. */
+  corrigiendo?: string;
   onContacto: (v: string) => void;
   onCelular: (v: string) => void;
   onProcesadores: (v: SeleccionProcesadores) => void;
@@ -1178,7 +1378,9 @@ function Paso2({
     <>
       <h2 className="mb-1 mt-6 text-[17px] font-bold">Datos del local</h2>
       <p className="mb-4 text-[12.5px] text-ink-2">
-        {ultimaVisita
+        {corrigiendo
+          ? `Lo que registraste a las ${corrigiendo.split(' ')[1] || ''}. Corrige solo lo que haga falta.`
+          : ultimaVisita
           ? `Vienen de la visita del ${ultimaVisita.split(' ')[0]}. Corrige solo lo que cambió.`
           : 'Este local no tiene visitas previas: completa lo que puedas.'}
       </p>
@@ -1371,6 +1573,7 @@ function Chip({ texto, marcado, onTocar }: { texto: string; marcado: boolean; on
 // ══════════════════════════════════════════════════
 function Paso3({
   fotos,
+  existentes,
   comprimiendo,
   observacion,
   dictando,
@@ -1385,6 +1588,8 @@ function Paso3({
   onDictar,
 }: {
   fotos: string[];
+  /** Al corregir: las que ya tiene la visita. Se conservan. */
+  existentes: FotoGuardada[];
   comprimiendo: boolean;
   observacion: string;
   dictando: boolean;
@@ -1402,14 +1607,14 @@ function Paso3({
   // Se comprueba en el cliente: en el servidor no hay navegador.
   useEffect(() => setPuedeDictar(hayDictado()), []);
 
-  const quedan = MAX_FOTOS - fotos.length;
+  const quedan = MAX_FOTOS - existentes.length - fotos.length;
 
   return (
     <>
       <div className="mb-2.5 mt-6 flex items-baseline justify-between">
         <h2 className="text-[17px] font-bold">Evidencia</h2>
         <span className="text-[12.5px] text-ink-2">
-          {fotos.length} de {MAX_FOTOS} fotos
+          {existentes.length + fotos.length} de {MAX_FOTOS} fotos
           {fotos.length > 0 && ` · ${pesoLegible(pesoTotal(fotos))}`}
         </span>
       </div>
@@ -1431,6 +1636,14 @@ function Paso3({
         className="hidden"
         onChange={(e) => onArchivos(e.target.files)}
       />
+
+      {existentes.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2" aria-label="Fotos que ya tiene la visita">
+          {existentes.map((f, i) => (
+            <MiniaturaFoto key={i} src={f.src} url={f.url} n={i + 1} className="h-20 w-20" />
+          ))}
+        </div>
+      )}
 
       {fotos.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
@@ -1532,7 +1745,7 @@ function Paso3({
             </span>
           )}
           <span className="rounded-full bg-gris-light px-2.5 py-0.5 text-[11.5px] font-semibold text-ink-2">
-            {fotos.length} {fotos.length === 1 ? 'foto' : 'fotos'}
+            {existentes.length + fotos.length} {existentes.length + fotos.length === 1 ? 'foto' : 'fotos'}
           </span>
         </div>
       </div>
@@ -1547,12 +1760,14 @@ function Confirmacion({
   local,
   dia,
   idVisita,
+  editando,
   onIniciarSesion,
   onVerHistorial,
 }: {
   local: Autocompletado;
   dia: DiaData | null;
   idVisita: string;
+  editando: boolean;
   onIniciarSesion: () => void;
   onVerHistorial: () => void;
 }) {
@@ -1587,7 +1802,9 @@ function Confirmacion({
 
       {enCola ? (
         <>
-          <h1 className="mt-5 text-[24px] font-bold">Visita guardada en el celular</h1>
+          <h1 className="mt-5 text-[24px] font-bold">
+            {editando ? 'Cambios guardados en el celular' : 'Visita guardada en el celular'}
+          </h1>
           <p className="mt-2 text-[14px] text-ink-2">
             {estado === 'sesion'
               ? 'Tu sesión venció. Inicia sesión y se enviará sola.'
@@ -1598,11 +1815,13 @@ function Confirmacion({
         </>
       ) : (
         <>
-          <h1 className="mt-5 text-[26px] font-bold">¡Visita guardada!</h1>
+          <h1 className="mt-5 text-[26px] font-bold">
+            {editando ? '¡Cambios guardados!' : '¡Visita guardada!'}
+          </h1>
           <p className="mt-2 text-[14px] text-ink-2">
             {local.comercio}
-            {local.mall_puerta && ` · ${tituloBonito(local.mall_puerta)}`} quedó
-            registrada.
+            {local.mall_puerta && ` · ${tituloBonito(local.mall_puerta)}`}{' '}
+            {editando ? 'quedó corregida.' : 'quedó registrada.'}
           </p>
         </>
       )}

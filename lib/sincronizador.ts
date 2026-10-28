@@ -48,13 +48,16 @@ function avisar() {
   window.dispatchEvent(new Event(EVENTO_COLA));
 }
 
-/** Manda una visita, sin redirigir al login a media pantalla. */
-function enviarVisita(payload: Record<string, unknown>): Promise<ApiResponse<unknown>> {
+/** Manda una visita o una edición, sin redirigir al login a media pantalla. */
+function enviarVisita(
+  payload: Record<string, unknown>,
+  accion: VisitaEncolada['accion'] = 'registrarVisita',
+): Promise<ApiResponse<unknown>> {
   // Sin red no vale la pena esperar al fallo.
   if (sinSenal()) {
     return Promise.resolve({ ok: false, reintentable: true, error: 'Sin conexión a internet.' });
   }
-  return api('registrarVisita', payload, { msLimite: MS_LIMITE_GUARDADO, redirigirSiVence: false });
+  return api(accion, payload, { msLimite: MS_LIMITE_GUARDADO, redirigirSiVence: false });
 }
 
 export interface EstadoSincronizacion {

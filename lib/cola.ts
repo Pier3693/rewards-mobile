@@ -43,6 +43,13 @@ export interface VisitaEncolada {
   /** Último error, para poder explicarle al CAP qué pasa. */
   ultimoError?: string;
   /**
+   * Qué acción del backend la envía. Sin valor, `registrarVisita` (las de
+   * antes de poder editar). Una edición corrige una visita ya registrada:
+   * su `payload.id_visita` es el de esa visita y su clave es
+   * `editar:<id_edicion>`.
+   */
+  accion?: 'registrarVisita' | 'editarVisita';
+  /**
    * El backend la rechazó (no fue un corte de red). No se reintenta sola:
    * espera a que el CAP la mire y toque Reintentar. Nunca se borra.
    */
@@ -168,6 +175,42 @@ export function nuevaEntrada(
   };
 }
 
+/** Prefijo de la clave de una edición en la cola. */
+export const PREFIJO_EDICION = 'editar:';
+
+/** True si la entrada corrige una visita en vez de crear otra. */
+export function esEdicion(v: Pick<VisitaEncolada, 'accion'>): boolean {
+  return v.accion === 'editarVisita';
+}
+
+/** El id de la visita que corrige una edición, o '' si no es una edición. */
+export function visitaEditada(v: Pick<VisitaEncolada, 'accion' | 'payload'>): string {
+  return esEdicion(v) ? String(v.payload?.id_visita || '').trim() : '';
+}
+
+/**
+ * Crea la entrada de una edición. `idEdicion` se fija al abrir el
+ * formulario, como el id de una visita: así un reenvío no la aplica dos
+ * veces (el backend recuerda las ya hechas).
+ */
+export function nuevaEdicion(
+  idEdicion: string,
+  payload: Record<string, unknown>,
+  resumen: ResumenEncolado,
+  correo: string,
+  ahora = Date.now(),
+): VisitaEncolada {
+  return {
+    ...nuevaEntrada(PREFIJO_EDICION + idEdicion, { ...payload, id_edicion: idEdicion }, resumen, correo, ahora),
+    accion: 'editarVisita',
+  };
+}
+
+/** Las que crean una visita: sin las ediciones, que no son visitas nuevas. */
+export function soloRegistros(visitas: VisitaEncolada[]): VisitaEncolada[] {
+  return visitas.filter((v) => !esEdicion(v));
+}
+
 export function normalizarCorreo(correo: string | undefined): string {
   return String(correo || '').trim().toLowerCase();
 }
@@ -189,7 +232,7 @@ export function encoladasDeAsignacion(
 ): VisitaEncolada[] {
   const id = String(idAsignacion || '').trim();
   if (!id) return [];
-  return visitas.filter((v) => v.resumen.idAsignacion === id);
+  return soloRegistros(visitas).filter((v) => v.resumen.idAsignacion === id);
 }
 
 /** True si ese local ya tiene una visita esperando a enviarse. */
@@ -199,7 +242,7 @@ export function localTieneEncolada(
 ): boolean {
   const id = String(idLocal || '').trim().toUpperCase();
   if (!id) return false;
-  return visitas.some(
+  return soloRegistros(visitas).some(
     (v) => String(v.resumen.idLocal || '').trim().toUpperCase() === id,
   );
 }

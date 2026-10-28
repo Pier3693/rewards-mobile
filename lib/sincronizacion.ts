@@ -9,7 +9,7 @@
 //  puede enviar, sigue esperando.
 // ══════════════════════════════════════════════════
 
-import { delUsuario, type AlmacenCola, type VisitaEncolada } from './cola.ts';
+import { delUsuario, esEdicion, visitaEditada, type AlmacenCola, type VisitaEncolada } from './cola.ts';
 import type { ApiResponse } from './api.ts';
 import { queHacerTrasEnvio, type TrasEnvio } from './visita.ts';
 
@@ -54,6 +54,21 @@ export interface ResultadoSincronizacion {
   sesionVencida: boolean;
 }
 
+export type Enviar = (
+  payload: Record<string, unknown>,
+  accion?: VisitaEncolada['accion'],
+) => Promise<ApiResponse<unknown>>;
+
+/**
+ * Una edición espera a que su visita llegue al backend: si la visita
+ * sigue en la cola, la edición no encontraría la fila. Va después porque
+ * la cola se envía de la más antigua a la más nueva.
+ */
+export function edicionEspera(v: VisitaEncolada, registrosEnCola: ReadonlySet<string>): boolean {
+  const id = visitaEditada(v);
+  return !!id && registrosEnCola.has(id);
+}
+
 export interface OpcionesSincronizacion {
   almacen: AlmacenCola;
   /**
@@ -61,8 +76,11 @@ export interface OpcionesSincronizacion {
    * las de otro saldrían a su nombre.
    */
   correo: string;
-  /** Manda una visita al backend. Normalmente `api('registrarVisita', …)`. */
-  enviar: (payload: Record<string, unknown>) => Promise<ApiResponse<unknown>>;
+  /**
+   * Manda una entrada al backend: `api(accion, payload)`, con
+   * `registrarVisita` si la entrada no dice otra cosa.
+   */
+  enviar: Enviar;
   ahora?: number;
   /** true para saltarse las esperas: lo usa el botón de reintentar. */
   forzar?: boolean;
@@ -92,15 +110,18 @@ export async function procesarCola({
   const visitas = delUsuario(await almacen.listar(), correo);
   let enviadas = 0;
   const pendientes = async () => delUsuario(await almacen.listar(), correo).length;
+  // Las visitas que todavía no llegaron: sus ediciones esperan.
+  const registrosEnCola = new Set(visitas.filter((v) => !esEdicion(v)).map((v) => v.idVisita));
 
   for (const v of visitas) {
     if (excluir?.has(v.idVisita)) continue;
+    if (edicionEspera(v, registrosEnCola)) continue;
     if (!forzar && !tocaReintentar(v, ahora)) continue;
     if (!forzar && esperaEnvioManual(v)) continue;
 
     let respuesta: ApiResponse<unknown>;
     try {
-      respuesta = await enviar(v.payload);
+      respuesta = await enviar(v.payload, v.accion);
     } catch (e) {
       await aplazar(almacen, v, ahora, String(e));
       continue;
@@ -115,6 +136,7 @@ export async function procesarCola({
       // Vale igual si el backend responde que ya estaba guardada: el
       // trabajo está hecho y mantenerla en cola solo la reenviaría.
       await almacen.borrar(v.idVisita);
+      registrosEnCola.delete(v.idVisita);
       enviadas++;
       continue;
     }
@@ -170,12 +192,12 @@ export async function enviarAhora({
 }: {
   almacen: AlmacenCola;
   entrada: VisitaEncolada;
-  enviar: (payload: Record<string, unknown>) => Promise<ApiResponse<unknown>>;
+  enviar: Enviar;
   ahora?: () => number;
 }): Promise<{ resultado: TrasEnvio; error: string }> {
   let r: ApiResponse<unknown>;
   try {
-    r = await enviar(entrada.payload);
+    r = await enviar(entrada.payload, entrada.accion);
   } catch (e) {
     r = { ok: false, reintentable: true, error: String(e) };
   }
@@ -205,7 +227,7 @@ export async function guardarPrimeroLocal({
 }: {
   almacen: AlmacenCola;
   entrada: VisitaEncolada;
-  enviar: (payload: Record<string, unknown>) => Promise<ApiResponse<unknown>>;
+  enviar: Enviar;
   enVuelo: Set<string>;
   ahora?: () => number;
 }): Promise<{ enCola: false } | { enCola: true; envio: Promise<{ resultado: TrasEnvio; error: string }> }> {
@@ -213,6 +235,14 @@ export async function guardarPrimeroLocal({
     await almacen.guardar(entrada);
   } catch {
     return { enCola: false };
+  }
+  // Una edición de una visita que sigue en la cola no sale ahora: la cola
+  // la manda después de la visita. No se cuenta como intento.
+  if (esEdicion(entrada)) {
+    const registros = new Set((await almacen.listar()).filter((v) => !esEdicion(v)).map((v) => v.idVisita));
+    if (edicionEspera(entrada, registros)) {
+      return { enCola: true, envio: Promise.resolve({ resultado: 'reintentar' as TrasEnvio, error: '' }) };
+    }
   }
   enVuelo.add(entrada.idVisita);
   const envio = enviarAhora({ almacen, entrada, enviar, ahora }).finally(() =>

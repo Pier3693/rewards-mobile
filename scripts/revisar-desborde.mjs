@@ -167,6 +167,15 @@ const RESPUESTAS = {
         status: 'Incidencia',
         observacion: '[Falta material POP] ' + OBSERVACION,
         fotos: 'https://drive.google.com/file/d/AbCdEf123/view, https://drive.google.com/file/d/GhIjKl456/view',
+        // Los datos del local, para abrirla en Editar visita.
+        kam: 'Kam Responsable Con Nombre Completo',
+        procesador: 'NI, Culqi',
+        cod_niubiz: '1234567890123456789',
+        cod_culqi: 'CQ-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+        beneficios: '6 PSI, Puntos BBVA, Descuento de 20% con tarjeta los martes',
+        material_pop: 'Permite',
+        contacto: 'Rosa María Fernández de los Santos',
+        celular: '01 123 4567',
       },
       {
         id_visita: '',
@@ -554,6 +563,23 @@ const PANTALLAS = [
     pasos: async (p) => {
       await p.evaluar(`(() => { const b = document.querySelector('main button.card'); if (b) b.click(); return !!b; })()`);
       await esperar(800);
+    },
+  },
+  // Corregir la visita de hoy: el mismo formulario, con lo registrado.
+  { nombre: 'registro-editar', pasos: async (p) => p.ir('/visita/PC-0001?editar=v-1', 3000) },
+  {
+    nombre: 'registro-editar-paso2',
+    pasos: async (p) => {
+      await p.evaluar(clicPorTexto('Continuar'));
+      await esperar(500);
+    },
+  },
+  {
+    // Las 2 fotos que ya tiene, y espacio para 2 más.
+    nombre: 'registro-editar-paso3',
+    pasos: async (p) => {
+      await p.evaluar(clicPorTexto('Continuar'));
+      await esperar(500);
     },
   },
   { nombre: 'perfil', pasos: async (p) => p.ir('/perfil', 2500) },

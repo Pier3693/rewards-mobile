@@ -16,7 +16,14 @@
 
 import { api, MS_LIMITE_CARGA, type ApiResponse } from './api.ts';
 import { getUsuario } from './auth.ts';
-import type { VisitaEncolada } from './cola.ts';
+import {
+  colaIndexedDB,
+  delUsuario,
+  esEdicion,
+  soloRegistros,
+  visitaEditada,
+  type VisitaEncolada,
+} from './cola.ts';
 import { normalizarStatus, type Status } from './visita.ts';
 
 /** Lo que devuelve `getMisVisitas` por cada visita. */
@@ -31,11 +38,31 @@ export interface VisitaApi {
   status: string;
   observacion: string;
   fotos: string;
+  // Los datos del local que se registraron. Los trae getMisVisitas desde
+  // que se puede editar una visita; una respuesta anterior no los tiene.
+  kam?: string;
+  procesador?: string;
+  cod_openpay?: string;
+  cod_niubiz?: string;
+  cod_izipay?: string;
+  cod_culqi?: string;
+  beneficios?: string;
+  material_pop?: string;
+  contacto?: string;
+  celular?: string;
 }
+
+/** Los campos que una edición puede cambiar (los mismos del formulario). */
+export const CAMPOS_EDITABLES = [
+  'motivo', 'status', 'observacion', 'procesador', 'cod_openpay', 'cod_niubiz',
+  'cod_izipay', 'cod_culqi', 'beneficios', 'material_pop', 'contacto', 'celular',
+] as const;
 
 export interface VisitaHistorial extends VisitaApi {
   /** Sigue en la cola del celular, todavía no llegó al backend. */
   pendiente: boolean;
+  /** Tiene una corrección esperando a enviarse; lo que se ve ya la incluye. */
+  edicionPendiente?: boolean;
   /** Las fotos de una visita en cola: todavía no tienen enlace de Drive. */
   fotosBase64?: string[];
 }
@@ -160,9 +187,72 @@ export function deLaCola(e: VisitaEncolada): VisitaHistorial {
     status: e.resumen.status || texto(p.status),
     observacion: texto(p.observacion),
     fotos: '',
+    kam: texto(p.kam),
+    procesador: texto(p.procesador),
+    cod_openpay: texto(p.cod_openpay),
+    cod_niubiz: texto(p.cod_niubiz),
+    cod_izipay: texto(p.cod_izipay),
+    cod_culqi: texto(p.cod_culqi),
+    beneficios: texto(p.beneficios),
+    material_pop: texto(p.material_pop),
+    contacto: texto(p.contacto),
+    celular: texto(p.celular),
     pendiente: true,
     fotosBase64: fotos,
   };
+}
+
+/**
+ * La visita como quedará cuando lleguen sus correcciones pendientes: los
+ * campos de la última y las fotos nuevas de todas, en orden.
+ */
+export function aplicarEdiciones<T extends VisitaHistorial>(v: T, ediciones: VisitaEncolada[]): T {
+  const suyas = ediciones
+    .filter((e) => visitaEditada(e) === String(v.id_visita || '').trim())
+    .sort((a, b) => a.creadoEn - b.creadoEn);
+  if (!suyas.length) return v;
+  const ultima = suyas[suyas.length - 1].payload || {};
+  const cambios: Partial<VisitaApi> = {};
+  for (const c of CAMPOS_EDITABLES) cambios[c] = texto(ultima[c]);
+  const nuevas = suyas.flatMap((e) =>
+    Array.isArray(e.payload?.fotosBase64)
+      ? (e.payload.fotosBase64 as unknown[]).filter((f): f is string => typeof f === 'string')
+      : [],
+  );
+  return {
+    ...v,
+    ...cambios,
+    edicionPendiente: true,
+    fotosBase64: [...(v.fotosBase64 || []), ...nuevas],
+  };
+}
+
+/**
+ * Una visita solo se corrige el mismo día en que se hizo (lo vuelve a
+ * comprobar el backend). La fecha es la de la hoja: "dd/MM/yyyy HH:mm".
+ */
+export function sePuedeEditar(v: Pick<VisitaApi, 'fecha' | 'id_local'>, ahora = new Date()): boolean {
+  const m = parsearFecha(v.fecha);
+  if (!m || !String(v.id_local || '').trim()) return false;
+  const hoy = diaDeHoy(ahora);
+  return m.anio === hoy.anio && m.mes === hoy.mes && m.dia === hoy.dia;
+}
+
+/**
+ * La visita de hoy a un local, la más reciente (con un duplicado, como el
+ * de Depilzone, la última). Para el botón Editar de Hoy.
+ */
+export function visitaDeHoyDelLocal<T extends VisitaApi>(
+  visitas: T[],
+  idLocal: string,
+  ahora = new Date(),
+): T | null {
+  const id = String(idLocal || '').trim().toUpperCase();
+  if (!id) return null;
+  const deHoy = visitas.filter(
+    (v) => String(v.id_local || '').trim().toUpperCase() === id && sePuedeEditar(v, ahora),
+  );
+  return ordenarRecientes(deHoy)[0] || null;
 }
 
 export interface HistorialUnido {
@@ -180,13 +270,17 @@ export interface HistorialUnido {
  */
 export function unirConCola(historial: VisitaApi[], cola: VisitaEncolada[]): HistorialUnido {
   const enBackend = new Set(historial.map((v) => String(v.id_visita || '').trim()).filter(Boolean));
+  // Una corrección no es una visita: se ve sobre la visita que corrige.
+  const ediciones = cola.filter(esEdicion);
   const pendientes = cola
-    .filter((e) => !enBackend.has(String(e.idVisita || '').trim()))
+    .filter((e) => !esEdicion(e) && !enBackend.has(String(e.idVisita || '').trim()))
     .sort((a, b) => b.creadoEn - a.creadoEn)
-    .map(deLaCola);
+    .map((e) => aplicarEdiciones(deLaCola(e), ediciones));
   return {
     pendientes,
-    enviadas: ordenarRecientes(historial).map((v) => ({ ...v, pendiente: false })),
+    enviadas: ordenarRecientes(historial).map((v) =>
+      aplicarEdiciones({ ...v, pendiente: false } as VisitaHistorial, ediciones),
+    ),
   };
 }
 
@@ -371,4 +465,29 @@ export async function getMisVisitas(forzar = false): Promise<RespuestaHistorial>
 export function historialEnCopia(): { data: VisitaApi[]; guardadoEn: number } | null {
   const c = leerCopia();
   return c ? { data: c.data, guardadoEn: c.guardadoEn } : null;
+}
+
+/**
+ * El id de la visita de hoy a ese local, para corregirla: primero una que
+ * siga en la cola (de esa asignación si se sabe), si no la más reciente
+ * del historial. '' si no hay ninguna.
+ */
+export async function buscarVisitaDeHoy(
+  idLocal: string,
+  idAsignacion = '',
+  ahora = new Date(),
+): Promise<string> {
+  const id = String(idLocal || '').trim().toUpperCase();
+  const enCola = soloRegistros(delUsuario(await colaIndexedDB.listar(), correoActual()))
+    .filter((v) =>
+      idAsignacion
+        ? v.resumen.idAsignacion === idAsignacion
+        : String(v.resumen.idLocal || '').trim().toUpperCase() === id,
+    )
+    .sort((a, b) => b.creadoEn - a.creadoEn)[0];
+  if (enCola) return enCola.idVisita;
+
+  const r = await getMisVisitas();
+  const v = r.ok && r.data ? visitaDeHoyDelLocal(r.data, id, ahora) : null;
+  return v?.id_visita || '';
 }

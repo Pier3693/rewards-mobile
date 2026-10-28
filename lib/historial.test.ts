@@ -13,10 +13,15 @@ import {
   fechaComoBackend,
   getMisVisitas,
   borrarCopiaHistorial,
+  sePuedeEditar,
+  visitaDeHoyDelLocal,
+  aplicarEdiciones,
   type VisitaApi,
+  type VisitaHistorial,
   type Dia,
 } from './historial.ts';
-import { nuevaEntrada } from './cola.ts';
+import type { Status } from './visita.ts';
+import { nuevaEntrada, nuevaEdicion } from './cola.ts';
 
 /** Miércoles 28 de octubre de 2026: la semana empezó el lunes 26. */
 const HOY: Dia = { anio: 2026, mes: 10, dia: 28 };
@@ -336,5 +341,88 @@ describe('copia en el celular', () => {
     await getMisVisitas(true);
     borrarCopiaHistorial();
     assert.equal(datos.has('rw_historial'), false);
+  });
+});
+
+// ══════════════════════════════════════════════════
+// Corregir una visita: el duplicado de Depilzone (28/10, 09:34 y 09:36).
+describe('editar una visita', () => {
+  const AHORA = new Date(2026, 9, 28, 18, 0);
+
+  const correccion = (idVisita: string, campos: Record<string, unknown>, creadoEn = Date.UTC(2026, 9, 28, 20)) =>
+    nuevaEdicion(
+      `e-${creadoEn}`,
+      { id_visita: idVisita, fotosBase64: [], ...campos },
+      { comercio: 'Depilzone', status: (campos.status || 'Todo Ok') as Status, idAsignacion: '', idLocal: 'PC-0001' },
+      'rosa@empresa.pe',
+      creadoEn,
+    );
+
+  test('solo el mismo día y con id_local', () => {
+    assert.equal(sePuedeEditar(visita({ fecha: '28/10/2026 09:34' }), AHORA), true);
+    assert.equal(sePuedeEditar(visita({ fecha: '27/10/2026 23:59' }), AHORA), false);
+    assert.equal(sePuedeEditar(visita({ fecha: '' }), AHORA), false);
+    assert.equal(sePuedeEditar(visita({ fecha: '28/10/2026 09:34', id_local: '' }), AHORA), false);
+  });
+
+  test('la visita de hoy del local: con un duplicado, la más reciente', () => {
+    const lista = [
+      visita({ id_visita: 'a', fecha: '28/10/2026 09:34' }),
+      visita({ id_visita: 'b', fecha: '28/10/2026 09:36' }),
+      visita({ id_visita: 'c', fecha: '27/10/2026 10:00' }),
+      visita({ id_visita: 'd', fecha: '28/10/2026 11:00', id_local: 'PC-0002' }),
+    ];
+    assert.equal(visitaDeHoyDelLocal(lista, 'pc-0001', AHORA)?.id_visita, 'b');
+    assert.equal(visitaDeHoyDelLocal(lista, 'PC-0009', AHORA), null);
+  });
+
+  test('lo que se ve ya incluye la corrección pendiente', () => {
+    const v: VisitaHistorial = { ...visita({ id_visita: 'b', status: 'Todo Ok', beneficios: 'PSI 6' }), pendiente: false };
+    const r = aplicarEdiciones(v, [
+      correccion('b', { status: 'Incidencia', observacion: '[Falta material] Sin stickers', beneficios: 'PSI 6, PUNTOS BBVA' }),
+    ]);
+    assert.equal(r.status, 'Incidencia');
+    assert.equal(r.beneficios, 'PSI 6, PUNTOS BBVA');
+    assert.equal(r.edicionPendiente, true);
+    assert.equal(r.comercio, 'Tambo+', 'lo que no se edita no cambia');
+  });
+
+  test('con dos correcciones, los campos de la última y las fotos de las dos', () => {
+    const v: VisitaHistorial = { ...visita({ id_visita: 'b' }), pendiente: false };
+    const r = aplicarEdiciones(v, [
+      correccion('b', { status: 'Reprogramar', fotosBase64: ['data:image/jpeg;base64,BBBB'] }, Date.UTC(2026, 9, 28, 21)),
+      correccion('b', { status: 'Incidencia', fotosBase64: ['data:image/jpeg;base64,AAAA'] }, Date.UTC(2026, 9, 28, 20)),
+    ]);
+    assert.equal(r.status, 'Reprogramar');
+    assert.deepEqual(r.fotosBase64, ['data:image/jpeg;base64,AAAA', 'data:image/jpeg;base64,BBBB']);
+  });
+
+  test('una corrección de otra visita no la toca', () => {
+    const v: VisitaHistorial = { ...visita({ id_visita: 'a' }), pendiente: false };
+    assert.equal(aplicarEdiciones(v, [correccion('b', { status: 'Incidencia' })]), v);
+  });
+
+  test('en el historial no sale como una visita más, sino sobre la que corrige', () => {
+    const historial = [visita({ id_visita: 'b', status: 'Todo Ok' })];
+    const { pendientes, enviadas } = unirConCola(historial, [correccion('b', { status: 'Incidencia' })]);
+    assert.equal(pendientes.length, 0);
+    assert.equal(enviadas.length, 1);
+    assert.equal(enviadas[0].status, 'Incidencia');
+    assert.equal(enviadas[0].edicionPendiente, true);
+  });
+
+  test('una visita en cola trae sus datos del local para poder corregirla', () => {
+    const e = nuevaEntrada(
+      'v-1',
+      { procesador: 'Niubiz', cod_niubiz: '111', beneficios: 'PSI 6', material_pop: 'Permite', contacto: 'Rosa', celular: '987654321' },
+      { comercio: 'Depilzone', status: 'Todo Ok', idAsignacion: '', idLocal: 'PC-0001' },
+      'rosa@empresa.pe',
+      Date.UTC(2026, 9, 28, 14, 34),
+    );
+    const [v] = unirConCola([], [e]).pendientes;
+    assert.equal(v.procesador, 'Niubiz');
+    assert.equal(v.cod_niubiz, '111');
+    assert.equal(v.material_pop, 'Permite');
+    assert.equal(v.celular, '987654321');
   });
 });
