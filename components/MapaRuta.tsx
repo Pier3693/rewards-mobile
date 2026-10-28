@@ -92,7 +92,7 @@ export default function MapaRuta() {
   const [cargando, setCargando] = useState(true);
   const [abierta, setAbierta] = useState<ParadaEnMapa | null>(null);
   const [local, setLocal] = useState<DatosLocal | null>(null);
-  /** Ya no hay más que esperar del local: "…" pasa a "—". */
+  /** Ya no hay más que esperar del local: "…" pasa a "-". */
   const [localListo, setLocalListo] = useState(false);
   const [lista, setLista] = useState<Lista | null>(null);
   /** Las paradas se agrupan según el zoom. */
@@ -461,9 +461,9 @@ export default function MapaRuta() {
 
           <dl className="mt-3 space-y-2.5 text-[14px]">
             {hoja.mall && <Dato etiqueta="Centro comercial" valor={hoja.mall} />}
-            <Dato etiqueta="Dirección" valor={hoja.direccion || '—'} />
-            <Dato etiqueta="KAM" valor={hoja.kam || (localListo ? '—' : '…')} />
-            <Dato etiqueta="Beneficios activos" valor={hoja.beneficios || (localListo ? '—' : '…')} />
+            <Dato etiqueta="Dirección" valor={hoja.direccion || '-'} />
+            <Dato etiqueta="KAM" valor={hoja.kam || (localListo ? '-' : '…')} />
+            <Dato etiqueta="Beneficios activos" valor={hoja.beneficios || (localListo ? '-' : '…')} />
           </dl>
 
           <div className="mt-5 grid grid-cols-2 gap-2">

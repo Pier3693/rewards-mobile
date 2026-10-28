@@ -177,7 +177,7 @@ export default function PerfilPage() {
         <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-primary text-2xl font-bold text-white">
           {iniciales}
         </span>
-        <p className="mt-3 text-lg font-bold">{user?.nombre || '—'}</p>
+        <p className="mt-3 text-lg font-bold">{user?.nombre || '-'}</p>
         <p className="text-sm text-ink-2 wrap-anywhere">{user?.correo || ''}</p>
         {user?.rol && (
           <span className="mt-2 inline-block rounded-full bg-primary-light px-3 py-1 text-[12px] font-semibold text-primary">
@@ -248,7 +248,7 @@ export default function PerfilPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-semibold">Versión</p>
-              <p className="truncate text-xs text-ink-2">{version || '—'}</p>
+              <p className="truncate text-xs text-ink-2">{version || '-'}</p>
             </div>
             <button
               onClick={buscar}
@@ -333,7 +333,7 @@ function Cifra({ titulo, valor, extra }: { titulo: string; valor?: number; extra
   return (
     <div className="px-4 py-3.5 text-center">
       <p className="text-[12px] font-semibold text-ink-2">{titulo}</p>
-      <p className="mt-0.5 text-[26px] font-bold leading-tight">{valor ?? '—'}</p>
+      <p className="mt-0.5 text-[26px] font-bold leading-tight">{valor ?? '-'}</p>
       <p className="min-h-[1rem] text-[11.5px] text-ink-2">{extra}</p>
     </div>
   );
