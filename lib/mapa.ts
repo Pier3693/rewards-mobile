@@ -19,6 +19,7 @@ import {
   type Parada,
 } from './ruta.ts';
 import { tituloBonito } from './texto.ts';
+import { etiquetasPsiPuntos } from './locales.ts';
 import { normalizarStatus, type Status } from './visita.ts';
 
 export interface Coordenadas {
@@ -235,6 +236,8 @@ export function estiloMarcador({ parada, numero }: ParadaEnMapa): EstiloMarcador
 export interface DatosLocal {
   kam?: string;
   beneficios?: string;
+  psi?: string;
+  puntos_bbva?: string;
   [k: string]: unknown;
 }
 
@@ -254,6 +257,9 @@ export interface InfoHoja {
   idLocal: string;
   idAsignacion: string;
   hecha: boolean;
+  /** "PSI 6" y "Puntos BBVA · No", del catálogo; vacíos hasta que llega el local. */
+  psi: string;
+  puntos: string;
 }
 
 export function infoHoja(
@@ -278,6 +284,7 @@ export function infoHoja(
     idLocal: parada.id_local || '',
     idAsignacion: parada.id_asignacion || '',
     hecha: estaCompletada(parada),
+    ...(local ? etiquetasPsiPuntos(local) : { psi: '', puntos: '' }),
   };
 }
 

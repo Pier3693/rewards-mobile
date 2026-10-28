@@ -457,6 +457,12 @@ export default function MapaRuta() {
                 Ubicación aproximada
               </span>
             )}
+            {/* Del catálogo: llegan con el local, como el KAM. */}
+            {[hoja.psi, hoja.puntos].filter(Boolean).map((t) => (
+              <span key={t} className="rounded-full bg-gris-light px-2.5 py-0.5 text-[11px] font-semibold text-ink-2">
+                {t}
+              </span>
+            ))}
           </div>
 
           <dl className="mt-3 space-y-2.5 text-[14px]">

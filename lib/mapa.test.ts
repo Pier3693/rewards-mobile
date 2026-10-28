@@ -205,6 +205,8 @@ describe('la hoja de detalle', () => {
 
   test('con la copia del local: KAM y beneficios', () => {
     const h = infoHoja(kennedy, { kam: 'ANA TORRES', beneficios: '20% con BBVA' });
+    assert.equal(infoHoja(kennedy, { psi: '6', puntos_bbva: 'NO' }).psi, 'PSI 6');
+    assert.equal(infoHoja(kennedy, { psi: 'NO', puntos_bbva: 'SI' }).puntos, 'Puntos BBVA · Sí');
     assert.equal(h.titulo, 'Tambo+');
     assert.equal(h.motivo, 'Capacitación Presencial');
     assert.equal(h.kam, 'Ana Torres');
@@ -229,6 +231,8 @@ describe('la hoja de detalle', () => {
 
   test('sin la copia del local: lo que hay, sin inventar', () => {
     const h = infoHoja(kennedy, null);
+    assert.equal(h.psi, '', 'sin el local, todavía no se sabe');
+    assert.equal(h.puntos, '');
     assert.equal(h.kam, '');
     assert.equal(h.beneficios, '');
   });

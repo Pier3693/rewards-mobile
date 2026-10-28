@@ -7,6 +7,7 @@ import {
   ultimaFueIncidencia,
   textoAntiguedad,
   etiquetaVisita,
+  etiquetasPsiPuntos,
   esLocalCC,
   textoParaCopiar,
   DIAS_SIN_VISITA_AVISO,
@@ -102,6 +103,39 @@ describe('avisoUltimaVisita', () => {
 
   test('el umbral es el que dice la constante', () => {
     assert.equal(DIAS_SIN_VISITA_AVISO, 30);
+  });
+});
+
+// La ficha decía "PSI · No" y no mostraba los puntos.
+describe('etiquetasPsiPuntos', () => {
+  const e = (psi: unknown, puntos_bbva: unknown) => etiquetasPsiPuntos({ psi, puntos_bbva });
+
+  test('el plazo de PSI', () => {
+    assert.equal(e('6', 'NO').psi, 'PSI 6');
+    assert.equal(e('6 PSI', '').psi, 'PSI 6');
+    assert.equal(e('PSI 12', '').psi, 'PSI 12');
+    assert.equal(e(6, '').psi, 'PSI 6');
+  });
+
+  test('sin PSI', () => {
+    assert.equal(e('NO', '').psi, 'Sin PSI');
+    assert.equal(e('no', '').psi, 'Sin PSI');
+    assert.equal(e('', '').psi, 'Sin PSI');
+    assert.equal(e(undefined, undefined).psi, 'Sin PSI');
+    assert.equal(e('0', '').psi, 'Sin PSI');
+  });
+
+  test('un sí sin plazo', () => {
+    assert.equal(e('SI', '').psi, 'Con PSI');
+    assert.equal(e('Sí', '').psi, 'Con PSI');
+  });
+
+  test('Puntos BBVA', () => {
+    assert.equal(e('', 'SI').puntos, 'Puntos BBVA · Sí');
+    assert.equal(e('', 'sí').puntos, 'Puntos BBVA · Sí');
+    assert.equal(e('', 'S').puntos, 'Puntos BBVA · Sí');
+    assert.equal(e('', 'NO').puntos, 'Puntos BBVA · No');
+    assert.equal(e('', '').puntos, 'Puntos BBVA · No');
   });
 });
 

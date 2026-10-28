@@ -13,6 +13,7 @@ import {
 import { useCola } from '@/lib/useCola';
 import {
   avisoUltimaVisita,
+  etiquetasPsiPuntos,
   diasDesde,
   textoAntiguedad,
   textoParaCopiar,
@@ -170,6 +171,7 @@ export default function LocalPage() {
   const ubicacion = ubicacionDe(local);
 
   const whatsapp = telefonoWhatsApp(local.contacto_cel);
+  const psiPuntos = etiquetasPsiPuntos(local);
   // Un fijo se puede llamar, pero no tiene WhatsApp.
   const llamada = telefonoLlamada(local.contacto_cel);
   const aviso = avisoUltimaVisita(local, ahora);
@@ -214,7 +216,8 @@ export default function LocalPage() {
         <div className="mt-3 flex flex-wrap justify-center gap-1.5">
           <Chip>{local.id_local}</Chip>
           {local.kam && <Chip>KAM · {tituloBonito(local.kam)}</Chip>}
-          {local.psi && <Chip>PSI · {tituloBonito(local.psi)}</Chip>}
+          <Chip>{psiPuntos.psi}</Chip>
+          <Chip>{psiPuntos.puntos}</Chip>
         </div>
       </div>
 

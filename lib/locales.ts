@@ -6,6 +6,8 @@
 //  los de la última visita registrada.
 // ══════════════════════════════════════════════════
 
+import { normalizar } from './datosLocal.ts';
+
 export interface LocalCompleto {
   // Del catálogo
   id_local: string;
@@ -82,6 +84,30 @@ export function avisoUltimaVisita(
   if (dias === null) return { tipo: 'nunca' };
   if (dias > DIAS_SIN_VISITA_AVISO) return { tipo: 'hace-mucho', dias };
   return { tipo: 'reciente', dias };
+}
+
+export interface EtiquetasPsiPuntos {
+  /** "PSI 6", "Sin PSI" o "Con PSI" (un sí sin plazo). */
+  psi: string;
+  /** "Puntos BBVA · Sí" o "Puntos BBVA · No". */
+  puntos: string;
+}
+
+/**
+ * Lo que dicen las columnas PSI y Puntos BBVA del catálogo (PC 2026 /
+ * CC 2026), que vienen como "6", "NO", "SI" o vacías.
+ */
+export function etiquetasPsiPuntos(
+  local: { psi?: unknown; puntos_bbva?: unknown },
+): EtiquetasPsiPuntos {
+  const psi = String(local.psi ?? '').trim();
+  const plazo = psi.match(/\d+/);
+  const conPsi = plazo && Number(plazo[0]) > 0;
+  const puntos = normalizar(String(local.puntos_bbva ?? ''));
+  return {
+    psi: conPsi ? `PSI ${Number(plazo[0])}` : /^s/.test(normalizar(psi)) ? 'Con PSI' : 'Sin PSI',
+    puntos: `Puntos BBVA · ${/^s/.test(puntos) ? 'Sí' : 'No'}`,
+  };
 }
 
 /** True si la última visita del local terminó en incidencia. */
