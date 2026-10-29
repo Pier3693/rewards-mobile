@@ -28,6 +28,7 @@ import {
   diasDelSelector,
   tituloDia,
   textoDisponible,
+  diaParaUrl,
 } from '@/lib/rutasProximas';
 import { useDiaElegido } from '@/lib/useDiaElegido';
 import SelectorDias from '@/components/SelectorDias';
@@ -353,7 +354,10 @@ export default function HoyPage() {
           fecha={diaFuturo.fecha}
           ruta={rutaFutura}
           ahora={ahora}
-          onTap={abrirParada}
+          onTap={(p) => {
+            // Con el día en la URL, el detalle no ofrece registrar.
+            if (p.id_local) router.push(`/local/${encodeURIComponent(p.id_local)}?dia=${diaParaUrl(diaFuturo.fecha)}`);
+          }}
         />
       ) : error ? (
         <div className="card p-6 text-center">

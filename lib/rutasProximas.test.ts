@@ -12,6 +12,9 @@ import {
   rutasProximasEnCopia,
   rutaDeHoyGuardada,
   borrarRutasProximas,
+  diaParaUrl,
+  diaDeUrl,
+  registroBloqueado,
 } from './rutasProximas.ts';
 import type { DiaData } from './cacheDia.ts';
 import type { Parada } from './ruta.ts';
@@ -83,6 +86,30 @@ describe('qué días se muestran', () => {
     assert.equal(esDiaFuturo('30/10/2026', VIERNES), false);
     assert.equal(esDiaFuturo('29/10/2026', VIERNES), false);
     assert.equal(esDiaFuturo('fecha rara', VIERNES), false);
+  });
+});
+
+// El detalle del local abierto desde una parada de un día que viene.
+describe('registrar desde el detalle', () => {
+  test('la fecha va y vuelve por la URL', () => {
+    assert.equal(diaParaUrl('31/10/2026'), '31-10-2026');
+    assert.equal(diaDeUrl('31-10-2026'), '31/10/2026');
+    assert.equal(diaDeUrl(diaParaUrl('02/11/2026')), '02/11/2026');
+    assert.equal(diaDeUrl('no-es-fecha'), '');
+    assert.equal(diaDeUrl(null), '');
+  });
+
+  test('de un día que viene, no: "Disponible mañana" o "Disponible el lunes"', () => {
+    assert.equal(registroBloqueado('31-10-2026', VIERNES), 'Disponible mañana');
+    assert.equal(registroBloqueado('02-11-2026', VIERNES), 'Disponible el lunes');
+  });
+
+  test('desde Buscar, desde hoy o de un día que ya pasó, sí', () => {
+    assert.equal(registroBloqueado(null, VIERNES), '');
+    assert.equal(registroBloqueado('', VIERNES), '');
+    assert.equal(registroBloqueado('30-10-2026', VIERNES), '', 'hoy');
+    assert.equal(registroBloqueado('29-10-2026', VIERNES), '', 'ya pasó');
+    assert.equal(registroBloqueado('31/13/2026', VIERNES), '', 'basura');
   });
 });
 

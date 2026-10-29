@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { registroBloqueado } from '@/lib/rutasProximas';
 import {
   getRutaDeHoy,
   getLocalDelDia,
@@ -43,6 +44,7 @@ import {
   IconCopy,
   IconNavigation,
   IconPlay,
+  IconCalendar,
   IconVideo,
   IconClock,
   IconChevronLeft,
@@ -66,6 +68,9 @@ export default function LocalPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(String(params?.id || '')).toUpperCase();
+  // Abierto desde una parada de un día que viene: se mira, no se registra.
+  const busqueda = useSearchParams();
+  const disponible = registroBloqueado(busqueda.get('dia'));
 
   const [local, setLocal] = useState<LocalCompleto | null>(null);
   const [dia, setDia] = useState<DiaData | null>(null);
@@ -354,13 +359,20 @@ export default function LocalPage() {
 
       {/* ── Botón fijo ── */}
       <div className="fixed inset-x-0 bottom-0 z-30 barra-ios px-5 pt-3 pb-barra-fija">
-        <button
-          onClick={() => iniciarRegistro()}
-          className="btn-grad mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"
-        >
-          <IconPlay className="h-[18px] w-[18px]" />
-          Iniciar registro de visita
-        </button>
+        {disponible ? (
+          <p className="mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl bg-gris-light text-[15px] font-semibold text-ink-2">
+            <IconCalendar className="h-[18px] w-[18px]" />
+            {disponible}
+          </p>
+        ) : (
+          <button
+            onClick={() => iniciarRegistro()}
+            className="btn-grad mx-auto flex min-h-[52px] w-full max-w-md items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white shadow-lg shadow-primary/25 transition active:scale-[0.98]"
+          >
+            <IconPlay className="h-[18px] w-[18px]" />
+            Iniciar registro de visita
+          </button>
+        )}
       </div>
 
       {toast && <Toast mensaje={toast} />}

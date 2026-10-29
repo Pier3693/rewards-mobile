@@ -687,6 +687,11 @@ const PANTALLAS = [
     },
   },
   {
+    // El detalle de un local abierto desde una parada de mañana: sin registrar.
+    nombre: 'detalle-futuro',
+    pasos: async (p) => p.ir(`/local/PC-0001?dia=${fechaEn(1).replace(/\//g, '-')}`, 2500),
+  },
+  {
     // El Mapa sigue el día elegido en Hoy. Va al final: deja elegido mañana.
     nombre: 'mapa-futuro',
     pasos: async (p) => p.ir('/mapa', 3500),

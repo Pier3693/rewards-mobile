@@ -84,6 +84,27 @@ export function esDiaFuturo(fecha: string, hoy = new Date()): boolean {
   return !!f && diasEntre(hoy, f) > 0;
 }
 
+/** "31/10/2026" → "31-10-2026", para la URL del detalle (?dia=). */
+export function diaParaUrl(fecha: string): string {
+  return fechaDe(fecha) ? fecha.replace(/\//g, '-') : '';
+}
+
+/** "31-10-2026" → "31/10/2026", o '' si no es una fecha. */
+export function diaDeUrl(param: string | null | undefined): string {
+  const fecha = String(param || '').trim().replace(/-/g, '/');
+  return fechaDe(fecha) ? fecha : '';
+}
+
+/**
+ * Si el detalle de un local se abrió desde una parada de un día que viene
+ * (?dia=), no se registra: "Disponible mañana" o "Disponible el lunes".
+ * '' si se puede registrar: sin día, hoy, o un día que ya pasó.
+ */
+export function registroBloqueado(param: string | null | undefined, hoy = new Date()): string {
+  const fecha = diaDeUrl(param);
+  return fecha && esDiaFuturo(fecha, hoy) ? textoDisponible(fecha, hoy) : '';
+}
+
 /** Solo los días que vienen, con alguna parada, del más cercano al más lejano. */
 export function soloFuturos(dias: DiaData[], hoy = new Date()): DiaData[] {
   return dias

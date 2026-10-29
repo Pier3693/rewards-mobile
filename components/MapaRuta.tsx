@@ -45,6 +45,7 @@ import {
   diasDelSelector,
   tituloDia,
   textoDisponible,
+  diaParaUrl,
 } from '@/lib/rutasProximas';
 import { useDiaElegido } from '@/lib/useDiaElegido';
 import SelectorDias from '@/components/SelectorDias';
@@ -701,7 +702,11 @@ export default function MapaRuta() {
               <IconNavigation className="h-[18px] w-[18px]" /> Cómo llegar
             </a>
             <button
-              onClick={() => router.push(`/local/${encodeURIComponent(hoja.idLocal)}`)}
+              onClick={() =>
+                router.push(
+                  `/local/${encodeURIComponent(hoja.idLocal)}${diaFuturo ? `?dia=${diaParaUrl(diaFuturo.fecha)}` : ''}`,
+                )
+              }
               disabled={!hoja.idLocal}
               className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border border-line bg-surface text-[14px] font-semibold text-ink disabled:opacity-50"
             >
