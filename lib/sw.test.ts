@@ -723,3 +723,44 @@ describe('mosaicos del mapa', () => {
     assert.ok(!caches.has('rewards-vieja'), 'la de la versión vieja sí se borra');
   });
 });
+
+describe('foto de perfil', () => {
+  const FOTO = 'https://drive.google.com/thumbnail?id=1AbCdEfGhIjKlMnOpQrStUvWxYz012345&sz=w320';
+  const opaca = () => ({ ...respuesta('img', { type: 'opaque', status: 0 }), clone() { return this; } });
+  const avatares = (sw: ReturnType<typeof montarSw>) => sw.caches.get('rw-avatar') ?? new Map();
+
+  test('se guarda la primera vez (aunque llegue opaca, sin CORS)', async () => {
+    const sw = montarSw(async () => opaca() as unknown as RespuestaFalsa);
+    const r = (await sw.pedir(FOTO)) as { type: string };
+    assert.equal(r.type, 'opaque');
+    assert.equal(avatares(sw).size, 1);
+  });
+
+  test('sin señal, se sirve la guardada', async () => {
+    let conSenal = true;
+    const sw = montarSw(async () => {
+      if (!conSenal) throw new TypeError('Failed to fetch');
+      return opaca() as unknown as RespuestaFalsa;
+    });
+    await sw.pedir(FOTO);
+    conSenal = false;
+    const r = (await sw.pedir(FOTO)) as { type: string };
+    assert.equal(r.type, 'opaque', 'la copia');
+  });
+
+  test('sin señal y sin copia, falla: la página enseña las iniciales', async () => {
+    const sw = montarSw(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const r = (await sw.pedir(FOTO)) as { type: string };
+    assert.equal(r.type, 'error');
+  });
+
+  test('sobrevive a una versión nueva', async () => {
+    const sw = montarSw(async () => respuesta());
+    sw.caches.set('rw-avatar', new Map([['/thumbnail', opaca()]]));
+    sw.lanzar('activate');
+    await soltar();
+    assert.equal(sw.caches.has('rw-avatar'), true);
+  });
+});
