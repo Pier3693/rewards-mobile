@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUsuario, clearSession, marcarSesionExpirada } from '@/lib/auth';
+import { clearSession, marcarSesionExpirada } from '@/lib/auth';
+import { useUsuario } from '@/lib/useUsuario';
+import Avatar from '@/components/Avatar';
 import { useCola } from '@/lib/useCola';
 import { normalizarStatus } from '@/lib/visita';
 import { plataformaDe, estaInstalada } from '@/lib/instalacion';
@@ -110,7 +112,7 @@ function resultadoDe(p: Parada): string {
 
 export default function HoyPage() {
   const router = useRouter();
-  const user = getUsuario();
+  const user = useUsuario();
   const [data, setData] = useState<DiaData | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -301,20 +303,11 @@ export default function HoyPage() {
     router.push(`/visita/${encodeURIComponent(p.id_local)}${asg}`);
   }
 
-  const iniciales = (user?.nombre || 'C')
-    .split(' ')
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-
   return (
     <main className="mx-auto max-w-md px-5 pt-pantalla">
       {/* ── Saludo ── */}
       <header className="mb-5 flex items-center gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-white">
-          {iniciales}
-        </span>
+        <Avatar nombre={user?.nombre} foto={user?.foto} className="h-12 w-12 text-sm" />
         <div className="min-w-0">
           <p className="text-[12.5px] text-ink-2">{fechaLarga(ahora)}</p>
           <h1 className="truncate text-[21px] font-bold leading-tight">

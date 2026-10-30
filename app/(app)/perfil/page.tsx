@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUsuario, clearSession } from '@/lib/auth';
+import { clearSession } from '@/lib/auth';
+import { useUsuario } from '@/lib/useUsuario';
+import Avatar from '@/components/Avatar';
 import {
   borrarCacheDelDia,
   getRutaDeHoy,
@@ -61,7 +63,7 @@ const ETIQUETA_TEMA: Record<Preferencia, string> = {
 
 export default function PerfilPage() {
   const router = useRouter();
-  const user = getUsuario();
+  const user = useUsuario();
   const cola = useCola();
   const enLinea = useConexion();
 
@@ -113,13 +115,6 @@ export default function PerfilPage() {
       ? { hechas: paradas.filter(estaCompletada).length, total: paradas.length }
       : null;
   }, [dia, cola.visitas]);
-
-  const iniciales = (user?.nombre || 'C')
-    .split(' ')
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
 
   function elegirTema(p: Preferencia) {
     setTema(p);
@@ -174,9 +169,7 @@ export default function PerfilPage() {
 
       {/* ── Quién ── */}
       <div className="mb-5 text-center">
-        <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-primary text-2xl font-bold text-white">
-          {iniciales}
-        </span>
+        <Avatar nombre={user?.nombre} foto={user?.foto} className="mx-auto h-20 w-20 text-2xl" />
         <p className="mt-3 text-lg font-bold">{user?.nombre || '-'}</p>
         <p className="text-sm text-ink-2 wrap-anywhere">{user?.correo || ''}</p>
         {user?.rol && (

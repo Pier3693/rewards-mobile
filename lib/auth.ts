@@ -17,7 +17,15 @@ export interface Usuario {
   nombre: string;
   correo: string;
   rol: string;
+  /** URL de la foto de perfil (miniatura de Drive), o vacía. */
+  foto?: string;
 }
+
+/** Avisa a las pantallas de que cambió el usuario guardado (su foto). */
+export const EVENTO_USUARIO = 'rw-usuario';
+
+/** Caché del service worker con la foto de perfil, para verla sin señal. */
+export const CACHE_AVATAR = 'rw-avatar';
 
 const KEY_TOKEN = 'rw_token';
 const KEY_USER = 'rw_user';
@@ -148,6 +156,36 @@ export function getUsuario(): Usuario | null {
 
 export function clearSession() {
   CLAVES_SESION.forEach(borrarEnTodos);
+  // La foto guardada es del usuario que se va.
+  try {
+    if (typeof caches !== 'undefined') caches.delete(CACHE_AVATAR).catch(() => {});
+  } catch {
+    /* sin Cache Storage: no hay nada guardado */
+  }
+}
+
+/**
+ * Cambia datos del usuario guardado (la foto, el nombre o el rol que
+ * devuelve getPerfil) en el mismo almacén donde está, sin tocar el token
+ * ni su vencimiento. Sin sesión, no hace nada.
+ */
+export function actualizarUsuario(cambios: Partial<Omit<Usuario, 'correo'>>) {
+  const actual = getUsuario();
+  if (!actual) return;
+  const nuevo = JSON.stringify({ ...actual, ...cambios });
+  for (const almacen of almacenes()) {
+    try {
+      if (almacen.getItem(KEY_USER)) {
+        almacen.setItem(KEY_USER, nuevo);
+        break;
+      }
+    } catch {
+      /* seguimos con el siguiente */
+    }
+  }
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new Event(EVENTO_USUARIO));
+  }
 }
 
 /** Milisegundos que faltan para que venza el token, o null si no se sabe. */

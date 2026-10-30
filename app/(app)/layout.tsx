@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { isLoggedIn } from '@/lib/auth';
+import { refrescarPerfil } from '@/lib/avatar';
 import TabBar, { hayBarraInferior } from '@/components/TabBar';
 import Sincronizador from '@/components/Sincronizador';
 
@@ -18,6 +19,8 @@ export default function AppLayout({
       router.replace('/login');
     } else {
       setListo(true);
+      // La foto de perfil, por detrás: sin bloquear ni mandar al login.
+      refrescarPerfil();
     }
   }, [router]);
 

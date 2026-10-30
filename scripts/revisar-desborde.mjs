@@ -25,7 +25,7 @@
 // ══════════════════════════════════════════════════
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -111,6 +111,13 @@ const fechaTexto = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.ge
 const fechaHoy = fechaTexto(hoy);
 /** Dentro de `n` días, para las rutas próximas. */
 const fechaEn = (n) => fechaTexto(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + n));
+
+/**
+ * La foto de perfil de prueba: el ícono de la app, servido en lugar de la
+ * miniatura de Drive, para no depender de la red.
+ */
+const FOTO_PERFIL = 'https://drive.google.com/thumbnail?id=1AbCdEfGhIjKlMnOpQrStUvWxYz012345&sz=w320';
+const PNG_FOTO = readFileSync(join(process.cwd(), 'public', 'icon-192.png')).toString('base64');
 
 /** 1×1 transparente. */
 const PNG_VACIO =
@@ -307,6 +314,13 @@ async function nuevaPestana(cdp, { ancho, alto }, tema) {
   const s = (m, p) => cdp.send(m, p, sessionId);
 
   await s('Page.enable');
+  // Un diálogo abierto (confirm, beforeunload) deja a la página sin
+  // responder y la revisión esperando para siempre: se acepta solo.
+  cdp.on((m) => {
+    if (m.sessionId === sessionId && m.method === 'Page.javascriptDialogOpening') {
+      s('Page.handleJavaScriptDialog', { accept: true }).catch(() => {});
+    }
+  });
   await s('Runtime.enable');
   await s('Network.enable');
   // Sin service worker: así /api/gs llega siempre a la intercepción.
@@ -318,9 +332,20 @@ async function nuevaPestana(cdp, { ancho, alto }, tema) {
 
   // /api/gs con datos de mentira.
   // Los mosaicos del mapa, con un PNG vacío: la prueba no pide nada a OpenStreetMap.
-  await s('Fetch.enable', { patterns: [{ urlPattern: '*/api/gs*' }, { urlPattern: '*tile.openstreetmap.org*' }] });
+  await s('Fetch.enable', {
+    patterns: [{ urlPattern: '*/api/gs*' }, { urlPattern: '*tile.openstreetmap.org*' }, { urlPattern: '*drive.google.com/thumbnail*' }],
+  });
   cdp.on(async (m) => {
     if (m.sessionId !== sessionId || m.method !== 'Fetch.requestPaused') return;
+    if (m.params.request.url.includes('drive.google.com/thumbnail')) {
+      await s('Fetch.fulfillRequest', {
+        requestId: m.params.requestId,
+        responseCode: 200,
+        responseHeaders: [{ name: 'Content-Type', value: 'image/png' }],
+        body: PNG_FOTO,
+      }).catch(() => {});
+      return;
+    }
     if (m.params.request.url.includes('tile.openstreetmap.org')) {
       await s('Fetch.fulfillRequest', {
         requestId: m.params.requestId,
@@ -495,6 +520,14 @@ const escribir = (selector, valor) => `(() => {
 const SESION = `(() => {
   localStorage.setItem('rw_token', 'prueba.desborde');
   localStorage.setItem('rw_user', JSON.stringify({ nombre: 'Capacitador De Campo Con Nombre Largo', correo: ${JSON.stringify(CORREO)}, rol: 'CAP' }));
+  localStorage.setItem('rw_aviso_instalar', '1');
+  return true;
+})()`;
+
+/** La misma sesión, con foto de perfil. */
+const SESION_CON_FOTO = `(() => {
+  localStorage.setItem('rw_token', 'prueba.desborde');
+  localStorage.setItem('rw_user', JSON.stringify({ nombre: 'Capacitador De Campo Con Nombre Largo', correo: ${JSON.stringify(CORREO)}, rol: 'CAP', foto: ${JSON.stringify(FOTO_PERFIL)} }));
   localStorage.setItem('rw_aviso_instalar', '1');
   return true;
 })()`;
@@ -687,6 +720,17 @@ const PANTALLAS = [
     },
   },
   {
+    // La foto de perfil en Hoy y en Perfil (las de antes quedan sin foto).
+    nombre: 'hoy-foto',
+    pasos: async (p) => {
+      await p.ir('/login', 500);
+      await p.evaluar(SESION_CON_FOTO);
+      await p.evaluar(`sessionStorage.removeItem('rw_dia_elegido'), true`);
+      await p.ir('/hoy', 3000);
+    },
+  },
+  { nombre: 'perfil-foto', pasos: async (p) => p.ir('/perfil', 2500) },
+  {
     // El detalle de un local abierto desde una parada de mañana: sin registrar.
     nombre: 'detalle-futuro',
     pasos: async (p) => p.ir(`/local/PC-0001?dia=${fechaEn(1).replace(/\//g, '-')}`, 2500),
@@ -747,6 +791,19 @@ const ELEGIDAS = SOLO.length ? PANTALLAS.filter((p) => SOLO.includes(p.nombre)) 
 
 // ── Recorrido ─────────────────────────────────────
 
+/** Más que esto en una pantalla es que se colgó: se avisa y se sigue. */
+const MS_TOPE_PANTALLA = 60_000;
+
+class Colgada extends Error {}
+
+function conTope(fn) {
+  let reloj;
+  const tope = new Promise((_, rechazar) => {
+    reloj = setTimeout(() => rechazar(new Colgada(`se colgó (más de ${MS_TOPE_PANTALLA / 1000} s)`)), MS_TOPE_PANTALLA);
+  });
+  return Promise.race([fn(), tope]).finally(() => clearTimeout(reloj));
+}
+
 async function main() {
   mkdirSync(SALIDA, { recursive: true });
   const { cdp, proceso, ws } = await abrirChrome();
@@ -756,57 +813,66 @@ async function main() {
   try {
     for (const vp of VIEWPORTS) {
       for (const tema of TEMAS) {
-        const p = await nuevaPestana(cdp, vp, tema);
+        let p = await nuevaPestana(cdp, vp, tema);
         console.log(`\n── ${vp.ancho}×${vp.alto} · ${tema === 'dark' ? 'oscuro' : 'claro'}${SIN_SEGURO ? ' · sin seguro' : ''} ──`);
         for (const pantalla of ELEGIDAS) {
           try {
-            await pantalla.pasos(p);
-            const r = await p.evaluar(MEDIR);
-            const desborda = r.scrollHtml > r.cw || r.scrollBody > r.cw;
-            const etiqueta = `${pantalla.nombre}`.padEnd(18);
-            if (!desborda && r.malos.length === 0) {
-              console.log(`  ✓ ${etiqueta} ${r.cw}px`);
-            } else {
-              fallos++;
-              console.log(
-                `  ✗ ${etiqueta} clientWidth ${r.cw} · scrollWidth html ${r.scrollHtml} body ${r.scrollBody} · sin los fijos ${r.sinFijos}`,
-              );
-              for (const f of r.porFijo) {
-                console.log(`      provoca desborde solo: ${f.elemento} (scroll ${f.scroll}, su contenido mide ${f.anchoPropio}px)`);
-              }
-              for (const m of r.malos.slice(0, DIAGNOSTICO ? 40 : 8)) {
-                const lado = m.sobraDerecha > 0 ? `+${m.sobraDerecha}px dcha` : `+${m.sobraIzquierda}px izq`;
+            await conTope(async () => {
+              await pantalla.pasos(p);
+              const r = await p.evaluar(MEDIR);
+              const desborda = r.scrollHtml > r.cw || r.scrollBody > r.cw;
+              const etiqueta = `${pantalla.nombre}`.padEnd(18);
+              if (!desborda && r.malos.length === 0) {
+                console.log(`  ✓ ${etiqueta} ${r.cw}px`);
+              } else {
+                fallos++;
                 console.log(
-                  `      ${lado}${m.fijo ? ' (fijo)' : ''}${m.enScroll ? ' (en scroll)' : ''} ancho ${m.ancho}  ${m.elemento}  «${m.texto}»`,
+                  `  ✗ ${etiqueta} clientWidth ${r.cw} · scrollWidth html ${r.scrollHtml} body ${r.scrollBody} · sin los fijos ${r.sinFijos}`,
                 );
+                for (const f of r.porFijo) {
+                  console.log(`      provoca desborde solo: ${f.elemento} (scroll ${f.scroll}, su contenido mide ${f.anchoPropio}px)`);
+                }
+                for (const m of r.malos.slice(0, DIAGNOSTICO ? 40 : 8)) {
+                  const lado = m.sobraDerecha > 0 ? `+${m.sobraDerecha}px dcha` : `+${m.sobraIzquierda}px izq`;
+                  console.log(
+                    `      ${lado}${m.fijo ? ' (fijo)' : ''}${m.enScroll ? ' (en scroll)' : ''} ancho ${m.ancho}  ${m.elemento}  «${m.texto}»`,
+                  );
+                }
               }
-            }
-            await p.captura(`${pantalla.nombre}-${vp.ancho}-${tema}${SIN_SEGURO ? '-sin-seguro' : ''}`);
+              await p.captura(`${pantalla.nombre}-${vp.ancho}-${tema}${SIN_SEGURO ? '-sin-seguro' : ''}`);
 
-            if (pantalla.nombre === 'mapa-grupo') {
-              const problemas = await p.evaluar(MEDIR_GRUPO);
-              for (const pr of problemas) console.log(`      ✗ grupo: ${pr}`);
-              fallos += problemas.length;
-            }
+              if (pantalla.nombre === 'mapa-grupo') {
+                const problemas = await p.evaluar(MEDIR_GRUPO);
+                for (const pr of problemas) console.log(`      ✗ grupo: ${pr}`);
+                fallos += problemas.length;
+              }
 
-            if (['mapa', 'mapa-sin-ubicacion', 'mapa-ruta', 'mapa-futuro'].includes(pantalla.nombre)) {
-              const problemas = await p.evaluar(MEDIR_MAPA);
-              for (const pr of problemas) console.log(`      ✗ mapa: ${pr}`);
-              fallos += problemas.length;
-            }
+              if (['mapa', 'mapa-sin-ubicacion', 'mapa-ruta', 'mapa-futuro'].includes(pantalla.nombre)) {
+                const problemas = await p.evaluar(MEDIR_MAPA);
+                for (const pr of problemas) console.log(`      ✗ mapa: ${pr}`);
+                fallos += problemas.length;
+              }
 
-            // El encabezado fijo del registro tiene que seguir arriba al hacer scroll.
-            if (pantalla.nombre === 'registro-paso3' && encabezadoFijo === null) {
-              encabezadoFijo = await p.evaluar(`(async () => {
-                window.scrollTo(0, 600);
-                await new Promise((r) => setTimeout(r, 300));
-                const e = document.querySelector('.encabezado-fijo');
-                return e ? Math.round(e.getBoundingClientRect().top) : null;
-              })()`);
-            }
+              // El encabezado fijo del registro tiene que seguir arriba al hacer scroll.
+              if (pantalla.nombre === 'registro-paso3' && encabezadoFijo === null) {
+                encabezadoFijo = await p.evaluar(`(async () => {
+                  window.scrollTo(0, 600);
+                  await new Promise((r) => setTimeout(r, 300));
+                  const e = document.querySelector('.encabezado-fijo');
+                  return e ? Math.round(e.getBoundingClientRect().top) : null;
+                })()`);
+              }
+            });
           } catch (e) {
             fallos++;
-            console.log(`  ! ${pantalla.nombre}: ${e.message}`);
+            if (e instanceof Colgada) {
+              console.log(`  ✗ ${pantalla.nombre}: ${e.message}`);
+              // La pestaña quedó trabada: otra nueva para las que siguen.
+              await Promise.race([p.cerrar(), esperar(5000)]).catch(() => {});
+              p = await nuevaPestana(cdp, vp, tema);
+            } else {
+              console.log(`  ! ${pantalla.nombre}: ${e.message}`);
+            }
           }
         }
         await p.cerrar();
