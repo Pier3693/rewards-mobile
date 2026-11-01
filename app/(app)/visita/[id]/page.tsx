@@ -24,6 +24,7 @@ import {
   localDelDiaEnCache,
   actualizarLocalTrasVisita,
   aplicarEncoladasAlDia,
+  diaTrasGuardar,
   type DiaData,
 } from '@/lib/cacheDia';
 import { useCola } from '@/lib/useCola';
@@ -34,6 +35,7 @@ import {
   estaCompletada,
   textoEstado,
   estadoTemporal,
+  type Encolada,
   type Parada,
 } from '@/lib/ruta';
 import { tituloBonito, momentoDe } from '@/lib/texto';
@@ -206,6 +208,8 @@ function RegistroVisita() {
   const [ofreceBorrador, setOfreceBorrador] = useState(false);
   const [confirmaSalida, setConfirmaSalida] = useState(false);
   const [guardada, setGuardada] = useState(false);
+  /** La visita recién guardada: la confirmación la cuenta aunque ya se haya enviado. */
+  const [resumenGuardado, setResumenGuardado] = useState<Encolada | null>(null);
   const [dictando, setDictando] = useState(false);
   /** Asignación elegida cuando el local tiene varias pendientes hoy. */
   const [asgElegida, setAsgElegida] = useState<string | null>(null);
@@ -238,10 +242,13 @@ function RegistroVisita() {
       ),
     [dia, cola.visitas, idVisita],
   );
-  /** Para el avance de la confirmación: aquí sí cuenta esta visita. */
+  /**
+   * Para el avance de la confirmación: aquí sí cuenta esta visita, también
+   * cuando ya se envió y salió de la cola.
+   */
   const diaConTodaLaCola = useMemo(
-    () => aplicarEncoladasAlDia(dia, cola.visitas.map((v) => v.resumen)),
-    [dia, cola.visitas],
+    () => diaTrasGuardar(dia, cola.visitas.map((v) => v.resumen), resumenGuardado),
+    [dia, cola.visitas, resumenGuardado],
   );
 
   const pendientes = useMemo(
@@ -741,6 +748,7 @@ function RegistroVisita() {
     if (await guardarYEnviar(entrada)) {
       recordarVisitaEnElLocal();
       borrarBorrador(clave);
+      setResumenGuardado(resumen);
       setGuardando(false);
       setGuardada(true);
       window.scrollTo({ top: 0 });
@@ -789,6 +797,7 @@ function RegistroVisita() {
     getRutaDeHoy(true).then((rDia) => {
       if (rDia.ok && rDia.data) setDia(rDia.data);
     });
+    setResumenGuardado(resumen);
     setGuardando(false);
     setGuardada(true);
     window.scrollTo({ top: 0 });

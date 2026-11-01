@@ -16,9 +16,11 @@ import {
   asignacionesDeLocal,
   asignacionesPendientesDeLocal,
   asignacionDeLocal,
+  diaTrasGuardar,
+  aplicarEncoladasAlDia,
   type DiaData,
 } from './cacheDia.ts';
-import type { Parada } from './ruta.ts';
+import { estaCompletada, ordenarRuta, siguienteParada, type Parada } from './ruta.ts';
 import { armarPeticionVisita, datosTrasVisita, type Autocompletado } from './visita.ts';
 import { leerProcesadores, leerBeneficios, leerMaterialPop } from './datosLocal.ts';
 
@@ -714,5 +716,34 @@ describe('copia de los locales: 7 días de respaldo', () => {
   test('una de hace 8 días ya no', () => {
     guardadaHace(8);
     assert.equal(localDelDiaEnCache('PC-0001'), null);
+  });
+});
+
+// Ache era la única parada: al enviarse la visita salía de la cola y la
+// confirmación volvía a "0 de 1" con "Siguiente: Ache".
+describe('el día de la confirmación', () => {
+  const ache = parada({ id_asignacion: 'ASG-ACHE', id_local: 'PC-0101', comercio: 'Ache' });
+  const avance = (d: DiaData | null) => {
+    const ruta = ordenarRuta(paradasDelDia(d));
+    return { hechas: ruta.filter(estaCompletada).length, total: ruta.length, siguiente: siguienteParada(ruta) };
+  };
+
+  test('cola vacía tras el envío: 1 de 1 y sin siguiente', () => {
+    const d = diaTrasGuardar(dia([ache]), [], { idAsignacion: 'ASG-ACHE', status: 'Todo Ok' });
+    assert.deepEqual(avance(d), { hechas: 1, total: 1, siguiente: null });
+  });
+
+  test('visita extra sin asignación: no marca ninguna parada', () => {
+    const d = diaTrasGuardar(dia([ache]), [], { idAsignacion: '', status: 'Todo Ok' });
+    const a = avance(d);
+    assert.equal(a.hechas, 0);
+    assert.equal(a.total, 1);
+    assert.equal(a.siguiente?.id_asignacion, 'ASG-ACHE');
+  });
+
+  test('sin visita guardada, igual que la cola sola', () => {
+    const cola = [{ idAsignacion: 'ASG-ACHE', status: 'Incidencia' }];
+    assert.deepEqual(diaTrasGuardar(dia([ache]), cola, null), aplicarEncoladasAlDia(dia([ache]), cola));
+    assert.equal(diaTrasGuardar(null, cola, cola[0]), null);
   });
 });

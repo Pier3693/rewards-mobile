@@ -412,6 +412,19 @@ export function aplicarEncoladasAlDia(
   };
 }
 
+/**
+ * El día de la confirmación: la visita recién guardada cuenta como hecha
+ * aunque ya haya salido de la cola. Al enviarse sale de la cola, y la
+ * ruta de la pantalla es la de antes: sin esto el avance volvía atrás.
+ */
+export function diaTrasGuardar(
+  data: DiaData | null,
+  encoladas: Encolada[],
+  guardada: Encolada | null,
+): DiaData | null {
+  return aplicarEncoladasAlDia(data, guardada ? [...encoladas, guardada] : encoladas);
+}
+
 /** Todas las paradas del día, pendientes y hechas, sin ordenar. */
 export function paradasDelDia(data: DiaData | null): Parada[] {
   if (!data) return [];
